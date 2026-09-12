@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
+import { supabase, isSupabaseConfigured, APP_DATA_ROW_ID } from "./supabaseClient.js";
 import {
   Search, User, Building2, DoorOpen, MapPin, Calendar, Bot, LogIn,
   LayoutDashboard, Plus, Pencil, Trash2, X, Menu, ChevronRight, ChevronLeft,
@@ -368,41 +369,99 @@ function useFacultyData() {
   const [data, setData] = useState(null);
   const [status, setStatus] = useState("loading"); // loading | ready | error
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const [backend, setBackend] = useState(isSupabaseConfigured ? "supabase" : "local");
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        setData(JSON.parse(raw));
+    let cancelled = false;
+
+    async function loadFromSupabase() {
+      const { data: row, error } = await supabase
+        .from("app_data")
+        .select("payload")
+        .eq("id", APP_DATA_ROW_ID)
+        .maybeSingle();
+
+      if (cancelled) return;
+
+      if (error) throw error;
+
+      if (row && row.payload) {
+        setData(row.payload);
       } else {
+        // First run: no row yet -> seed Supabase with the default demo data
         const seed = seedData();
         setData(seed);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(seed));
+        const { error: insertError } = await supabase
+          .from("app_data")
+          .insert({ id: APP_DATA_ROW_ID, payload: seed });
+        if (insertError) throw insertError;
       }
-    } catch (e) {
-      // localStorage unavailable (e.g. private browsing) -> run in-memory only
-      setData(seedData());
-    } finally {
-      setStatus("ready");
     }
+
+    function loadFromLocalStorage() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          setData(JSON.parse(raw));
+        } else {
+          const seed = seedData();
+          setData(seed);
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(seed));
+        }
+      } catch (e) {
+        setData(seedData());
+      }
+    }
+
+    (async () => {
+      if (isSupabaseConfigured) {
+        try {
+          await loadFromSupabase();
+          if (!cancelled) setBackend("supabase");
+        } catch (e) {
+          // Supabase reachable-but-misconfigured (e.g. table/policy missing) -> fall back locally
+          if (!cancelled) {
+            loadFromLocalStorage();
+            setBackend("local");
+            setSaveError("เชื่อมต่อ Supabase ไม่สำเร็จ (ตรวจสอบว่ารันไฟล์ supabase_schema.sql แล้ว) กำลังใช้ข้อมูลในเครื่องแทนชั่วคราว");
+          }
+        }
+      } else {
+        loadFromLocalStorage();
+      }
+      if (!cancelled) setStatus("ready");
+    })();
+
+    return () => { cancelled = true; };
   }, []);
 
-  const [saveError, setSaveError] = useState("");
-
-  const persist = (nextData) => {
+  const persist = async (nextData) => {
     setData(nextData);
     setSaving(true);
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(nextData));
+      if (backend === "supabase") {
+        const { error } = await supabase
+          .from("app_data")
+          .update({ payload: nextData, updated_at: new Date().toISOString() })
+          .eq("id", APP_DATA_ROW_ID);
+        if (error) throw error;
+      } else {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(nextData));
+      }
       setSaveError("");
     } catch (e) {
-      setSaveError("บันทึกไม่สำเร็จ: พื้นที่จัดเก็บของเบราว์เซอร์อาจเต็ม (มักเกิดจากอัปโหลดรูป/วิดีโอขนาดใหญ่เกินไป) ลองใช้รูปที่มีขนาดไฟล์เล็กลง");
+      setSaveError(
+        backend === "supabase"
+          ? "บันทึกขึ้น Supabase ไม่สำเร็จ: ตรวจสอบการเชื่อมต่ออินเทอร์เน็ตหรือสิทธิ์ (RLS policy) ในตาราง app_data"
+          : "บันทึกไม่สำเร็จ: พื้นที่จัดเก็บของเบราว์เซอร์อาจเต็ม (มักเกิดจากอัปโหลดรูป/วิดีโอขนาดใหญ่เกินไป) ลองใช้รูปที่มีขนาดไฟล์เล็กลง"
+      );
     } finally {
       setSaving(false);
     }
   };
 
-  return { data, status, saving, saveError, persist };
+  return { data, status, saving, saveError, backend, persist };
 }
 
 /* =========================================================================
@@ -1770,7 +1829,7 @@ function GenericAdminTable({ title, items, fields, onAdd, onUpdate, onDelete, re
 /* =========================================================================
    ADMIN — DASHBOARD
    ========================================================================= */
-function AdminDashboard({ data, persist, saveError, onLogout, goto }) {
+function AdminDashboard({ data, persist, saveError, backend, onLogout, goto }) {
   const [tab, setTab] = useState("overview");
 
   const update = (key, updater) => persist({ ...data, [key]: updater(data[key] || []) });
@@ -1840,7 +1899,19 @@ function AdminDashboard({ data, persist, saveError, onLogout, goto }) {
       <div>
         {tab === "overview" && (
           <div>
-            <h2 style={{ fontSize: 24, marginBottom: 18 }}>ภาพรวมระบบ</h2>
+            <h2 style={{ fontSize: 24, marginBottom: 6 }}>ภาพรวมระบบ</h2>
+            <div style={{ marginBottom: 18 }}>
+              <span className="sfg-badge" style={{
+                color: backend === "supabase" ? "var(--success)" : "var(--accent)",
+                borderColor: backend === "supabase" ? "var(--success)" : "var(--accent)",
+              }}>
+                {backend === "supabase" ? (
+                  <><Check size={12} /> เชื่อมต่อฐานข้อมูล Supabase แล้ว — ข้อมูลถาวร ทุกคนเห็นตรงกัน</>
+                ) : (
+                  <><AlertCircle size={12} /> ยังใช้ localStorage ในเครื่องนี้เท่านั้น (ยังไม่ได้ตั้งค่า Supabase)</>
+                )}
+              </span>
+            </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 14 }}>
               {stats.map((s) => (
                 <div key={s.label} className="sfg-card" style={{ padding: 18 }}>
@@ -2199,7 +2270,7 @@ function SettingsForm({ settings, onSave }) {
    ROOT APP
    ========================================================================= */
 export default function App() {
-  const { data, status, saving, saveError, persist } = useFacultyData();
+  const { data, status, saving, saveError, backend, persist } = useFacultyData();
   const [page, setPage] = useState({ name: "home", id: null });
   const [query, setQuery] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
@@ -2263,7 +2334,7 @@ export default function App() {
     case "admin-login": content = <AdminLoginPage onLogin={() => setIsAdmin(true)} goto={goto} />; break;
     case "admin-dashboard":
       content = isAdmin
-        ? <AdminDashboard data={data} persist={persist} saveError={saveError} onLogout={() => setIsAdmin(false)} goto={goto} />
+        ? <AdminDashboard data={data} persist={persist} saveError={saveError} backend={backend} onLogout={() => setIsAdmin(false)} goto={goto} />
         : <AdminLoginPage onLogin={() => setIsAdmin(true)} goto={goto} />;
       break;
     default: content = <HomePage data={data} goto={goto} query={query} setQuery={setQuery} onSearchSubmit={onSearchSubmit} />;
