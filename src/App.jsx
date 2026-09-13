@@ -552,12 +552,12 @@ function useFacultyData() {
           setSaveError("Supabase ไม่สามารถเชื่อมต่อได้ เปลี่ยนไปบันทึกในเครื่อง (localStorage) แล้ว — ข้อมูลยังอยู่เฉพาะบนเครื่องนี้เท่านั้น");
         } catch (e2) {
           setSaveError(
-            "บันทึกไม่สำเร็จ: พื้นที่จัดเก็บของเบราว์เซอร์อาจเต็ม (มักเกิดจากอัปโหลดรูป/วิดีโอขนาดใหญ่เกินไป) ลองใช้รูปที่มีขนาดไฟล์เล็กลง"
+            "บันทึกไม่สำเร็จ: พื้นที่จัดเก็บของเบราว์เซอร์อาจเต็มสำหรับบันทึกข้อมูลในเครื่อง (รูปภาพถูกอัปโหลดไปยัง Supabase Storage แล้ว) ลองล้างข้อมูลเก่าหรือบันทึกอีกครั้ง"
           );
         }
       } else {
         setSaveError(
-          "บันทึกไม่สำเร็จ: พื้นที่จัดเก็บของเบราว์เซอร์อาจเต็ม (มักเกิดจากอัปโหลดรูป/วิดีโอขนาดใหญ่เกินไป) ลองใช้รูปที่มีขนาดไฟล์เล็กลง"
+          "บันทึกไม่สำเร็จ: พื้นที่จัดเก็บของเบราว์เซอร์อาจเต็มสำหรับบันทึกข้อมูลในเครื่อง (รูปภาพถูกอัปโหลดไปยัง Supabase Storage แล้ว) ลองล้างข้อมูลเก่าหรือบันทึกอีกครั้ง"
         );
       }
     } finally {
@@ -1812,7 +1812,7 @@ function AdminLoginPage({ onLogin, goto }) {
 /* =========================================================================
    ADMIN — GENERIC CRUD TABLE
    ========================================================================= */
-function GenericAdminTable({ title, items, fields, onAdd, onUpdate, onDelete, renderTitle, backend }) {
+function GenericAdminTable({ title, items, fields, onAdd, onUpdate, onDelete, renderTitle }) {
   const [imgError, setImgError] = useState("");
   const emptyForm = () => Object.fromEntries(fields.map((f) => [f.key, f.default !== undefined ? f.default : ""]));
   const [form, setForm] = useState(emptyForm());
@@ -1880,8 +1880,12 @@ function GenericAdminTable({ title, items, fields, onAdd, onUpdate, onDelete, re
                         }
                         setImgError("");
                         try {
-                          const url = await uploadMedia(file, { maxBytes: MAX_IMAGE_BYTES, skipSupabase: backend !== "supabase" });
+                          const url = await uploadMedia(file, { maxBytes: MAX_IMAGE_BYTES });
                           setForm((prev) => ({ ...prev, [f.key]: url }));
+                          if (editingId) {
+                            const current = items.find((it) => it.id === editingId);
+                            if (current) onUpdate(editingId, { ...current, [f.key]: url });
+                          }
                         } catch (err) {
                           setImgError(err.message || "อัปโหลดไฟล์ไม่สำเร็จ");
                         }
@@ -2063,7 +2067,7 @@ function AdminDashboard({ data, persist, saveError, backend, onLogout, goto }) {
           <GenericAdminTable
             title="อาจารย์"
             items={data.teachers}
-            backend={backend}
+
             renderTitle={fullName}
             onAdd={addItem("teachers", "t")}
             onUpdate={editItem("teachers")}
@@ -2089,7 +2093,7 @@ function AdminDashboard({ data, persist, saveError, backend, onLogout, goto }) {
           <GenericAdminTable
             title="สาขา"
             items={data.departments}
-            backend={backend}
+
             renderTitle={(d) => d.name}
             onAdd={addItem("departments", "dep")}
             onUpdate={editItem("departments")}
@@ -2108,7 +2112,7 @@ function AdminDashboard({ data, persist, saveError, backend, onLogout, goto }) {
           <GenericAdminTable
             title="ห้องเรียน"
             items={data.classrooms}
-            backend={backend}
+
             renderTitle={(c) => `ห้อง ${c.number}`}
             onAdd={addItem("classrooms", "c")}
             onUpdate={editItem("classrooms")}
@@ -2130,7 +2134,7 @@ function AdminDashboard({ data, persist, saveError, backend, onLogout, goto }) {
           <GenericAdminTable
             title="อาคาร"
             items={data.buildings}
-            backend={backend}
+
             renderTitle={(b) => b.name}
             onAdd={addItem("buildings", "b")}
             onUpdate={editItem("buildings")}
@@ -2148,7 +2152,7 @@ function AdminDashboard({ data, persist, saveError, backend, onLogout, goto }) {
           <GenericAdminTable
             title="สถานที่"
             items={data.places}
-            backend={backend}
+
             renderTitle={(p) => p.name}
             onAdd={addItem("places", "p")}
             onUpdate={editItem("places")}
@@ -2171,7 +2175,7 @@ function AdminDashboard({ data, persist, saveError, backend, onLogout, goto }) {
           <GenericAdminTable
             title="รูปภาพแนะนำ (แกลเลอรี)"
             items={data.gallery || []}
-            backend={backend}
+
             renderTitle={(g) => g.caption || "ไม่มีคำบรรยาย"}
             onAdd={addItem("gallery", "g")}
             onUpdate={editItem("gallery")}
@@ -2187,7 +2191,7 @@ function AdminDashboard({ data, persist, saveError, backend, onLogout, goto }) {
           <GenericAdminTable
             title="ตารางสอน"
             items={data.schedules}
-            backend={backend}
+
             renderTitle={(s) => s.subject}
             onAdd={addItem("schedules", "s")}
             onUpdate={editItem("schedules")}
@@ -2204,7 +2208,7 @@ function AdminDashboard({ data, persist, saveError, backend, onLogout, goto }) {
         )}
 
         {tab === "settings" && (
-          <SettingsForm settings={data.settings} backend={backend} onSave={(s) => persist({ ...data, settings: s })} />
+          <SettingsForm settings={data.settings} onSave={(s) => persist({ ...data, settings: s })} />
         )}
       </div>
     </div>
@@ -2212,7 +2216,7 @@ function AdminDashboard({ data, persist, saveError, backend, onLogout, goto }) {
   );
 }
 
-function SettingsForm({ settings, onSave, backend }) {
+function SettingsForm({ settings, onSave }) {
   const [form, setForm] = useState(settings);
   const [logoError, setLogoError] = useState("");
   const [heroError, setHeroError] = useState("");
@@ -2250,8 +2254,10 @@ function SettingsForm({ settings, onSave, backend }) {
               }
               setLogoError("");
               try {
-                const url = await uploadMedia(file, { maxBytes: MAX_IMAGE_BYTES, skipSupabase: backend !== "supabase" });
-                setForm((prev) => ({ ...prev, logoImage: url }));
+                const url = await uploadMedia(file, { maxBytes: MAX_IMAGE_BYTES });
+                const next = { ...form, logoImage: url };
+                setForm(next);
+                onSave(next);
               } catch (err) { setLogoError(err.message || "อัปโหลดไฟล์ไม่สำเร็จ"); }
             }}
           />
@@ -2336,8 +2342,10 @@ function SettingsForm({ settings, onSave, backend }) {
                   }
                   setHeroError("");
                   try {
-                    const url = await uploadMedia(file, { maxBytes: MAX_VIDEO_BYTES, skipSupabase: backend !== "supabase" });
-                    setForm((prev) => ({ ...prev, heroMediaUrl: url }));
+                    const url = await uploadMedia(file, { maxBytes: MAX_VIDEO_BYTES });
+                    const next = { ...form, heroMediaUrl: url };
+                    setForm(next);
+                    onSave(next);
                   } catch (err) { setHeroError(err.message || "อัปโหลดไฟล์ไม่สำเร็จ"); }
                 }}
               />
@@ -2350,8 +2358,7 @@ function SettingsForm({ settings, onSave, backend }) {
             />
             {heroError && <div style={{ fontSize: 12, color: "var(--danger)", marginTop: 4 }}>{heroError}</div>}
             <div style={{ fontSize: 11, color: "var(--ink-soft)", marginTop: 4 }}>
-              รองรับไฟล์ MP4/WebM/GIF ขนาดไม่เกิน {MAX_VIDEO_MB} MB
-              {backend !== "supabase" && " — โหมด localStorage อาจไม่รองรับวิดีโอขนาดใหญ่"}
+              รองรับไฟล์ MP4/WebM/GIF ขนาดไม่เกิน {MAX_VIDEO_MB} MB — ไฟล์จะถูกอัปโหลดไปยัง Supabase Storage (bucket: media) และบันทึก Public URL ลงฐานข้อมูลโดยอัตโนมัติ
             </div>
           </div>
         )}
@@ -2399,10 +2406,12 @@ function SettingsForm({ settings, onSave, backend }) {
                             }
                             setSlideErrors((prev) => { const a = [...(prev || [])]; a[i] = ""; return a; });
                             try {
-                              const url = await uploadMedia(file, { maxBytes: MAX_IMAGE_BYTES, skipSupabase: backend !== "supabase" });
+                              const url = await uploadMedia(file, { maxBytes: MAX_IMAGE_BYTES });
                               const next = [...(form.heroSlideshowImages || [])];
                               next[i] = url;
-                              setForm({ ...form, heroSlideshowImages: next });
+                              const nextForm = { ...form, heroSlideshowImages: next };
+                              setForm(nextForm);
+                              onSave(nextForm);
                             } catch (err) {
                               setSlideErrors((prev) => { const a = [...(prev || [])]; a[i] = err.message || "อัปโหลดไฟล์ไม่สำเร็จ"; return a; });
                             }

@@ -49,45 +49,33 @@ export function withTimeout(promise, ms = SUPABASE_TIMEOUT_MS) {
   });
 }
 
-function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
 /**
- * Uploads a file and returns a URL to use in the app's data.
- * - If Supabase is online (skipSupabase = false): uploads to Supabase Storage and returns a short public URL.
- *   This keeps the database row small and fast (base64 embedding was causing save timeouts).
- * - If Supabase is NOT configured / offline / skipSupabase = true: falls back to a base64 data URL
- *   (works fine for the localStorage-only demo mode, since there's no server to upload to).
+ * Uploads a file to Supabase Storage (bucket "media") and returns its permanent public URL.
+ * No base64/localStorage fallback: the URL is written into the app_data row on Supabase instead,
+ * which keeps rows small, avoids browser storage limits, and prevents images disappearing on reload.
  *
  * @param {File} file ไฟล์ที่ต้องการอัปโหลด
  * @param {object} [options]
  * @param {number} [options.maxBytes] ขนาดไฟล์สูงสุด (ไฟล์ใหญ่กว่านี้จะ throw ข้อผิดพลาด)
  * @param {number} [options.timeoutMs] หมดเวลารอ Supabase (ค่าเริ่มต้น 8000ms)
- * @param {boolean} [options.skipSupabase] true = ข้าม Supabase แล้วใช้ base64 โดยตรง (โหมด localStorage)
  */
-export async function uploadMedia(file, { maxBytes, timeoutMs = 8000, skipSupabase = false } = {}) {
+export async function uploadMedia(file, { maxBytes, timeoutMs = 8000 } = {}) {
   if (maxBytes != null && file.size > maxBytes) {
     throw new Error(`ไฟล์ขนาดเกินกำหนด (สูงสุด ${Math.round(maxBytes / (1024 * 1024))} MB)`);
   }
-  if (isSupabaseConfigured && supabase && !skipSupabase) {
-    const ext = (file.name.split(".").pop() || "bin").toLowerCase();
-    const path = `uploads/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-    const { error } = await withTimeout(
-      supabase.storage.from(MEDIA_BUCKET).upload(path, file, {
-        cacheControl: "3600",
-        upsert: false,
-      }),
-      timeoutMs
-    );
-    if (error) throw error;
-    const { data } = supabase.storage.from(MEDIA_BUCKET).getPublicUrl(path);
-    return data.publicUrl;
+  if (!isSupabaseConfigured || !supabase) {
+    throw new Error("การอัปโหลดรูปภาพต้องตั้งค่า Supabase ก่อน (กรุณาเพิ่ม VITE_SUPABASE_URL และ VITE_SUPABASE_ANON_KEY ในไฟล์ .env)");
   }
-  return fileToBase64(file);
+  const ext = (file.name.split(".").pop() || "bin").toLowerCase();
+  const path = `uploads/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+  const { error } = await withTimeout(
+    supabase.storage.from(MEDIA_BUCKET).upload(path, file, {
+      cacheControl: "3600",
+      upsert: false,
+    }),
+    timeoutMs
+  );
+  if (error) throw error;
+  const { data } = supabase.storage.from(MEDIA_BUCKET).getPublicUrl(path);
+  return data.publicUrl;
 }
