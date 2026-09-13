@@ -168,7 +168,6 @@ const GlobalStyle = () => (
    CONSTANTS
    ========================================================================= */
 const DAYS = ["จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์"];
-const STORAGE_KEY = "smart-faculty-guide-data-v1";
 const ADMIN_USER = "admin";
 const ADMIN_PASS = "faculty2026";
 
@@ -453,7 +452,6 @@ function useFacultyData() {
   const [status, setStatus] = useState("loading"); // loading | ready | error
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
-  const [backend, setBackend] = useState(isSupabaseConfigured ? "supabase" : "local");
 
   useEffect(() => {
     let cancelled = false;
@@ -488,38 +486,23 @@ function useFacultyData() {
       }
     }
 
-    function loadFromLocalStorage() {
-      try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (raw) {
-          setData(JSON.parse(raw));
-        } else {
-          const seed = seedData();
-          setData(seed);
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(seed));
-        }
-      } catch (e) {
-        setData(seedData());
-      }
-    }
-
     (async () => {
       if (isSupabaseConfigured) {
         try {
           await loadFromSupabase();
-          if (!cancelled) setBackend("supabase");
+          if (!cancelled) setStatus("ready");
         } catch (e) {
-          // Supabase unreachable (paused/offline) or misconfigured -> fall back locally
           if (!cancelled) {
-            loadFromLocalStorage();
-            setBackend("local");
-            setSaveError("เชื่อมต่อ Supabase ไม่สำเร็จ (โปรเจกต์อาจถูกหยุดชั่วคราว/ออฟไลน์ หรือยังไม่ได้รันไฟล์ supabase_schema.sql) — กำลังใช้ข้อมูลในเครื่องแทน");
+            setStatus("error");
+            setSaveError("เชื่อมต่อ Supabase ไม่สำเร็จ (โปรเจกต์อาจถูกหยุดชั่วคราว/ออฟไลน์ หรือยังไม่ได้รันไฟล์ supabase_schema.sql) — ตรวจสอบการตั้งค่า VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY แล้วลองใหม่");
           }
         }
       } else {
-        loadFromLocalStorage();
+        if (!cancelled) {
+          setStatus("error");
+          setSaveError("ยังไม่ได้ตั้งค่า Supabase — กำหนด VITE_SUPABASE_URL และ VITE_SUPABASE_ANON_KEY ในไฟล์ .env ก่อนใช้งาน");
+        }
       }
-      if (!cancelled) setStatus("ready");
     })();
 
     return () => { cancelled = true; };
@@ -529,43 +512,25 @@ function useFacultyData() {
     setData(nextData);
     setSaving(true);
     try {
-      if (backend === "supabase") {
-        const { error } = await withTimeout(
-          supabase
-            .from("app_data")
-            .update({ payload: nextData, updated_at: new Date().toISOString() })
-            .eq("id", APP_DATA_ROW_ID),
-          SUPABASE_TIMEOUT_MS
-        );
-        if (error) throw error;
-        setSaveError("");
-      } else {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(nextData));
-        setSaveError("");
-      }
+      const { error } = await withTimeout(
+        supabase
+          .from("app_data")
+          .update({ payload: nextData, updated_at: new Date().toISOString() })
+          .eq("id", APP_DATA_ROW_ID),
+        SUPABASE_TIMEOUT_MS
+      );
+      if (error) throw error;
+      setSaveError("");
     } catch (e) {
-      if (backend === "supabase") {
-        // Supabase offline / ใช้งานไม่ได้ -> อัปเดตข้อมูลเข้า localStorage และสลับโหมดเป็น local อัตโนมัติ
-        try {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(nextData));
-          setBackend("local");
-          setSaveError("Supabase ไม่สามารถเชื่อมต่อได้ เปลี่ยนไปบันทึกในเครื่อง (localStorage) แล้ว — ข้อมูลยังอยู่เฉพาะบนเครื่องนี้เท่านั้น");
-        } catch (e2) {
-          setSaveError(
-            "บันทึกไม่สำเร็จ: พื้นที่จัดเก็บของเบราว์เซอร์อาจเต็มสำหรับบันทึกข้อมูลในเครื่อง (รูปภาพถูกอัปโหลดไปยัง Supabase Storage แล้ว) ลองล้างข้อมูลเก่าหรือบันทึกอีกครั้ง"
-          );
-        }
-      } else {
-        setSaveError(
-          "บันทึกไม่สำเร็จ: พื้นที่จัดเก็บของเบราว์เซอร์อาจเต็มสำหรับบันทึกข้อมูลในเครื่อง (รูปภาพถูกอัปโหลดไปยัง Supabase Storage แล้ว) ลองล้างข้อมูลเก่าหรือบันทึกอีกครั้ง"
-        );
-      }
+      setSaveError(
+        "บันทึกไม่สำเร็จ: เชื่อมต่อ Supabase ไม่ได้ ลองตรวจสอบการเชื่อมต่ออินเทอร์เน็ตหรือการตั้งค่า แล้วลองบันทึกอีกครั้ง"
+      );
     } finally {
       setSaving(false);
     }
   };
 
-  return { data, status, saving, saveError, backend, persist };
+  return { data, status, saving, saveError, persist };
 }
 
 /* =========================================================================
@@ -1965,7 +1930,7 @@ function GenericAdminTable({ title, items, fields, onAdd, onUpdate, onDelete, re
 /* =========================================================================
    ADMIN — DASHBOARD
    ========================================================================= */
-function AdminDashboard({ data, persist, saveError, backend, onLogout, goto }) {
+function AdminDashboard({ data, persist, saveError, onLogout, goto }) {
   const [tab, setTab] = useState("overview");
 
   const update = (key, updater) => persist({ ...data, [key]: updater(data[key] || []) });
@@ -2037,15 +2002,8 @@ function AdminDashboard({ data, persist, saveError, backend, onLogout, goto }) {
           <div>
             <h2 style={{ fontSize: 24, marginBottom: 6 }}>ภาพรวมระบบ</h2>
             <div style={{ marginBottom: 18 }}>
-              <span className="sfg-badge" style={{
-                color: backend === "supabase" ? "var(--success)" : "var(--accent)",
-                borderColor: backend === "supabase" ? "var(--success)" : "var(--accent)",
-              }}>
-                {backend === "supabase" ? (
-                  <><Check size={12} /> เชื่อมต่อฐานข้อมูล Supabase แล้ว — ข้อมูลถาวร ทุกคนเห็นตรงกัน</>
-                ) : (
-                  <><AlertCircle size={12} /> ยังใช้ localStorage ในเครื่องนี้เท่านั้น (ยังไม่ได้ตั้งค่า Supabase)</>
-                )}
+              <span className="sfg-badge" style={{ color: "var(--success)", borderColor: "var(--success)" }}>
+                <><Check size={12} /> เชื่อมต่อฐานข้อมูล Supabase แล้ว — ข้อมูลถาวร ทุกคนเห็นตรงกัน</>
               </span>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 14 }}>
@@ -2538,7 +2496,7 @@ function SettingsForm({ settings, onSave }) {
    ROOT APP
    ========================================================================= */
 export default function App() {
-  const { data, status, saving, saveError, backend, persist } = useFacultyData();
+  const { data, status, saving, saveError, persist } = useFacultyData();
   const [page, setPage] = useState({ name: "home", id: null });
   const [query, setQuery] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
@@ -2580,6 +2538,21 @@ export default function App() {
 
   const onSearchSubmit = () => goto("search");
 
+  if (status === "error" && !data) {
+    return (
+      <div className="sfg-app" style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+        <GlobalStyle />
+        <div style={{ textAlign: "center", color: "var(--danger)", maxWidth: 560 }}>
+          <AlertCircle size={30} style={{ marginBottom: 12, opacity: 0.85 }} />
+          <div style={{ fontSize: 15, lineHeight: 1.6 }}>
+            ไม่สามารถโหลดข้อมูลจาก Supabase ได้<br />
+            <span style={{ color: "var(--ink-soft)", fontSize: 13.5 }}>{saveError}</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (status === "loading" || !data) {
     return (
       <div className="sfg-app" style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -2616,7 +2589,7 @@ export default function App() {
     case "admin-login": content = <AdminLoginPage onLogin={() => setIsAdmin(true)} goto={goto} />; break;
     case "admin-dashboard":
       content = isAdmin
-        ? <AdminDashboard data={data} persist={persist} saveError={saveError} backend={backend} onLogout={() => setIsAdmin(false)} goto={goto} />
+        ? <AdminDashboard data={data} persist={persist} saveError={saveError} onLogout={() => setIsAdmin(false)} goto={goto} />
         : <AdminLoginPage onLogin={() => setIsAdmin(true)} goto={goto} />;
       break;
     default: content = <HomePage data={data} goto={goto} query={query} setQuery={setQuery} onSearchSubmit={onSearchSubmit} />;
