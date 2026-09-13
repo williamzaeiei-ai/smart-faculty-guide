@@ -1176,25 +1176,32 @@ function TeachersPage({ data, goto }) {
   const [q, setQ] = useState("");
   const [dep, setDep] = useState("");
   const [bld, setBld] = useState("");
-  const filtered = data.teachers.filter((t) =>
-    (`${t.firstName}${t.lastName}`.includes(q) || q === "") &&
-    (dep === "" || t.departmentId === dep) &&
-    (bld === "" || t.buildingId === bld)
-  );
+  const teachers = data?.teachers || [];
+  const departments = data?.departments || [];
+  const buildings = data?.buildings || [];
+  const ql = q.trim().toLowerCase();
+  const filtered = teachers.filter((t) => {
+    const deptName = byId(departments, t.departmentId)?.name || "";
+    const bldName = byId(buildings, t.buildingId)?.name || "";
+    const haystack = `${t.firstName}${t.lastName}${t.title}${t.room}${deptName}${bldName}`.toLowerCase();
+    return (ql === "" || haystack.includes(ql)) &&
+      (dep === "" || t.departmentId === dep) &&
+      (bld === "" || t.buildingId === bld);
+  });
   return (
-    <PageShell title="อาจารย์ทั้งหมด" subtitle={`พบ ${filtered.length} ท่านจากทั้งหมด ${data.teachers.length} ท่าน`} icon={User} accent="#2E6F6B" stat={data.teachers.length}>
+    <PageShell title="อาจารย์ทั้งหมด" subtitle={`พบ ${filtered.length} ท่านจากทั้งหมด ${teachers.length} ท่าน`} icon={User} accent="#2E6F6B" stat={teachers.length}>
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 24 }}>
         <div style={{ position: "relative", flex: "1 1 220px" }}>
           <Search size={15} style={{ position: "absolute", left: 10, top: 12, color: "var(--ink-soft)" }} />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="ค้นหาชื่ออาจารย์..." className="sfg-input" style={{ paddingLeft: 30 }} />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="ค้นหา ชื่อ, ตำแหน่ง, สาขา, ห้องทำงาน..." className="sfg-input" style={{ paddingLeft: 30 }} />
         </div>
         <select value={dep} onChange={(e) => setDep(e.target.value)} className="sfg-input" style={{ width: 190 }}>
           <option value="">ทุกสาขา</option>
-          {data.departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+          {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
         </select>
         <select value={bld} onChange={(e) => setBld(e.target.value)} className="sfg-input" style={{ width: 160 }}>
           <option value="">ทุกอาคาร</option>
-          {data.buildings.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+          {buildings.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
         </select>
       </div>
       {filtered.length === 0 ? <EmptyState text="ไม่พบอาจารย์ที่ตรงกับเงื่อนไข" /> : (
@@ -1410,20 +1417,37 @@ function BuildingDetail({ data, id, goto }) {
 
 function PlacesPage({ data, goto }) {
   const [type, setType] = useState("");
-  const filtered = data.places.filter((p) => type === "" || p.type === type);
+  const [q, setQ] = useState("");
+  const places = data?.places || [];
+  const buildings = data?.buildings || [];
+  const ql = q.trim().toLowerCase();
+  const filtered = places.filter((p) => {
+    const meta = PLACE_TYPES[p.type] || PLACE_TYPES.other;
+    const bldName = byId(buildings, p.buildingId)?.name || "";
+    const haystack = `${p.name}${p.description}${bldName}${meta.label}${p.floor}${p.openTime}-${p.closeTime}`.toLowerCase();
+    return (type === "" || p.type === type) && (ql === "" || haystack.includes(ql));
+  });
   return (
-    <PageShell title="สถานที่สำคัญภายในคณะ" subtitle="ค้นหาสิ่งอำนวยความสะดวกและจุดสำคัญต่าง ๆ ในคณะ" icon={MapPin} accent="#B0492E" stat={data.places.length}>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 24 }}>
-        <button onClick={() => setType("")} className="sfg-btn" style={{ border: "1px solid var(--border)", background: type === "" ? "var(--primary)" : "var(--surface)", color: type === "" ? "var(--on-primary)" : "var(--ink)" }}>ทั้งหมด</button>
-        {Object.entries(PLACE_TYPES).map(([key, meta]) => (
-          <button key={key} onClick={() => setType(key)} className="sfg-btn" style={{ border: "1px solid var(--border)", background: type === key ? "var(--primary)" : "var(--surface)", color: type === key ? "var(--on-primary)" : "var(--ink)" }}>
-            <meta.icon size={14} /> {meta.label}
-          </button>
-        ))}
+    <PageShell title="สถานที่สำคัญภายในคณะ" subtitle="ค้นหาสิ่งอำนวยความสะดวกและจุดสำคัญต่าง ๆ ในคณะ" icon={MapPin} accent="#B0492E" stat={places.length}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 24 }}>
+        <div style={{ position: "relative" }}>
+          <Search size={15} style={{ position: "absolute", left: 10, top: 12, color: "var(--ink-soft)" }} />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="ค้นหา ชื่อสถานที่, รายละเอียด, อาคาร, ชั้น, เวลาเปิด-ปิด..." className="sfg-input" style={{ paddingLeft: 30 }} />
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button onClick={() => setType("")} className="sfg-btn" style={{ border: "1px solid var(--border)", background: type === "" ? "var(--primary)" : "var(--surface)", color: type === "" ? "var(--on-primary)" : "var(--ink)" }}>ทั้งหมด</button>
+          {Object.entries(PLACE_TYPES).map(([key, meta]) => (
+            <button key={key} onClick={() => setType(key)} className="sfg-btn" style={{ border: "1px solid var(--border)", background: type === key ? "var(--primary)" : "var(--surface)", color: type === key ? "var(--on-primary)" : "var(--ink)" }}>
+              <meta.icon size={14} /> {meta.label}
+            </button>
+          ))}
+        </div>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(230px,1fr))", gap: 16 }}>
-        {filtered.map((p) => <PlaceCard key={p.id} place={p} data={data} onClick={() => goto("place-detail", p.id)} />)}
-      </div>
+      {filtered.length === 0 ? <EmptyState text="ไม่พบสถานที่ที่ตรงกับเงื่อนไข" /> : (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(230px,1fr))", gap: 16 }}>
+          {filtered.map((p) => <PlaceCard key={p.id} place={p} data={data} onClick={() => goto("place-detail", p.id)} />)}
+        </div>
+      )}
     </PageShell>
   );
 }
@@ -1556,13 +1580,32 @@ function MapPage({ data, focusId, goto }) {
 function SearchPage({ data, query, goto }) {
   const q = (query || "").trim().toLowerCase();
   const results = useMemo(() => {
+    const teachers = data?.teachers || [];
+    const departments = data?.departments || [];
+    const buildings = data?.buildings || [];
     if (!q) return { teachers: [], departments: [], classrooms: [], buildings: [], places: [] };
-    const teachers = data.teachers.filter((t) => `${t.firstName}${t.lastName}${t.room}`.toLowerCase().includes(q));
-    const departments = data.departments.filter((d) => d.name.toLowerCase().includes(q));
-    const classrooms = data.classrooms.filter((c) => c.number.toLowerCase().includes(q));
-    const buildings = data.buildings.filter((b) => b.name.toLowerCase().includes(q));
-    const places = data.places.filter((p) => p.name.toLowerCase().includes(q) || p.description.toLowerCase().includes(q));
-    return { teachers, departments, classrooms, buildings, places };
+    const matchedTeachers = teachers.filter((t) => {
+      const deptName = byId(departments, t.departmentId)?.name || "";
+      const bldName = byId(buildings, t.buildingId)?.name || "";
+      const haystack = `${t.firstName}${t.lastName}${t.title}${t.room}${deptName}${bldName}`.toLowerCase();
+      return haystack.includes(q);
+    });
+    const matchedDepartments = departments.filter((d) => (d.name || "").toLowerCase().includes(q));
+    const matchedClassrooms = (data?.classrooms || []).filter((c) => (c.number || "").toLowerCase().includes(q));
+    const matchedBuildings = buildings.filter((b) => (b.name || "").toLowerCase().includes(q));
+    const matchedPlaces = (data?.places || []).filter((p) => {
+      const meta = PLACE_TYPES[p.type] || PLACE_TYPES.other;
+      const bldName = byId(buildings, p.buildingId)?.name || "";
+      const haystack = `${p.name}${p.description}${bldName}${meta.label}${p.floor}${p.openTime}-${p.closeTime}`.toLowerCase();
+      return haystack.includes(q);
+    });
+    return {
+      teachers: matchedTeachers,
+      departments: matchedDepartments,
+      classrooms: matchedClassrooms,
+      buildings: matchedBuildings,
+      places: matchedPlaces,
+    };
   }, [q, data]);
 
   const total = results.teachers.length + results.departments.length + results.classrooms.length + results.buildings.length + results.places.length;
@@ -1637,69 +1680,90 @@ function ContactPage({ data }) {
    AI CHATBOT
    ========================================================================= */
 function answerQuery(raw, data) {
-  const q = raw.trim();
-  const ql = q.toLowerCase();
+  const q = (raw || "").trim();
   if (!q) return "พิมพ์คำถามเกี่ยวกับอาจารย์ ห้องเรียน อาคาร หรือสถานที่ภายในคณะได้เลยครับ/ค่ะ";
+  const ql = q.toLowerCase();
+  const norm = (v) => (v == null ? "" : String(v).toLowerCase());
 
-  // teacher match
-  const teacher = data.teachers.find((t) => ql.includes(t.firstName.toLowerCase()) || ql.includes(`${t.firstName}${t.lastName}`.toLowerCase()));
-  if (teacher) {
-    const dept = byId(data.departments, teacher.departmentId);
-    const bld = byId(data.buildings, teacher.buildingId);
-    if (ql.includes("สอน") || ql.includes("วันนี้") || ql.includes("ตาราง")) {
-      const day = currentDayThai();
-      const todays = data.schedules.filter((s) => s.teacherId === teacher.id && (ql.includes("วันนี้") ? s.day === day : true));
-      if (todays.length === 0) {
-        return `วันนี้ (${day}) ${fullName(teacher)} ไม่มีคาบสอนในระบบครับ/ค่ะ`;
+  // Always read from the latest main-state context, defensively.
+  const context = {
+    teachers: data?.teachers || [],
+    departments: data?.departments || [],
+    places: data?.places || [],
+    classrooms: data?.classrooms || [],
+    buildings: data?.buildings || [],
+    schedules: data?.schedules || [],
+  };
+
+  try {
+    const { teachers, departments, places, classrooms, buildings, schedules } = context;
+
+    if (teachers.length === 0 && departments.length === 0 && places.length === 0) {
+      return "ขณะนี้ยังไม่มีข้อมูลอาจารย์/สาขา/สถานที่ในระบบ กรุณาลองใหม่อีกครั้งภายหลัง หรือติดต่อผู้ดูแลคณะครับ/ค่ะ";
+    }
+
+    // teacher match
+    const teacher = teachers.find((t) => ql.includes(norm(t.firstName)) || ql.includes(norm(`${t.firstName}${t.lastName}`)));
+    if (teacher) {
+      const dept = byId(departments, teacher.departmentId);
+      const bld = byId(buildings, teacher.buildingId);
+      if (ql.includes("สอน") || ql.includes("วันนี้") || ql.includes("ตาราง")) {
+        const day = currentDayThai();
+        const todays = schedules.filter((s) => s.teacherId === teacher.id && (ql.includes("วันนี้") ? s.day === day : true));
+        if (todays.length === 0) {
+          return `วันนี้ (${day}) ${fullName(teacher)} ไม่มีคาบสอนในระบบครับ/ค่ะ`;
+        }
+        const lines = todays.map((s) => {
+          const room = byId(classrooms, s.classroomId);
+          return `${s.day} เวลา ${s.start}-${s.end} วิชา ${s.subject} ห้อง ${room?.number || "-"}`;
+        }).join(" / ");
+        return `ตารางสอนของ ${fullName(teacher)}: ${lines}`;
       }
-      const lines = todays.map((s) => {
-        const room = byId(data.classrooms, s.classroomId);
-        return `${s.day} เวลา ${s.start}-${s.end} วิชา ${s.subject} ห้อง ${room?.number || "-"}`;
-      }).join(" / ");
-      return `ตารางสอนของ ${fullName(teacher)}: ${lines}`;
+      if (ql.includes("พบ") || ql.includes("เจอ") || ql.includes("office")) {
+        const oh = teacher.officeHours || [];
+        if (oh.length === 0) return `ยังไม่มีข้อมูลเวลาพบของ ${fullName(teacher)} ในระบบครับ/ค่ะ`;
+        const text = oh.map((o) => `${o.day} ${o.start}-${o.end}`).join(", ");
+        const status = isTeacherAvailableNow(teacher) ? "ขณะนี้สามารถพบได้ (🟢)" : "ขณะนี้ไม่สามารถพบได้ (🔴)";
+        return `${fullName(teacher)} สามารถพบได้ในช่วง: ${text}. ${status}`;
+      }
+      return `${fullName(teacher)} อยู่ห้อง ${teacher.room} ${bld?.name} ชั้น ${teacher.floor} สาขา ${dept?.name}`;
     }
-    if (ql.includes("พบ") || ql.includes("เจอ") || ql.includes("office")) {
-      const oh = teacher.officeHours || [];
-      if (oh.length === 0) return `ยังไม่มีข้อมูลเวลาพบของ ${fullName(teacher)} ในระบบครับ/ค่ะ`;
-      const text = oh.map((o) => `${o.day} ${o.start}-${o.end}`).join(", ");
-      const status = isTeacherAvailableNow(teacher) ? "ขณะนี้สามารถพบได้ (🟢)" : "ขณะนี้ไม่สามารถพบได้ (🔴)";
-      return `${fullName(teacher)} สามารถพบได้ในช่วง: ${text}. ${status}`;
+
+    // classroom match
+    const roomMatch = classrooms.find((c) => ql.includes(norm(c.number)));
+    if (roomMatch) {
+      const bld = byId(buildings, roomMatch.buildingId);
+      return `ห้อง ${roomMatch.number} อยู่ที่ ${bld?.name} ชั้น ${roomMatch.floor} (${roomMatch.type}, ความจุ ${roomMatch.capacity} ที่นั่ง)`;
     }
-    return `${fullName(teacher)} อยู่ห้อง ${teacher.room} ${bld?.name} ชั้น ${teacher.floor} สาขา ${dept?.name}`;
-  }
 
-  // classroom match
-  const roomMatch = data.classrooms.find((c) => ql.includes(c.number.toLowerCase()));
-  if (roomMatch) {
-    const bld = byId(data.buildings, roomMatch.buildingId);
-    return `ห้อง ${roomMatch.number} อยู่ที่ ${bld?.name} ชั้น ${roomMatch.floor} (${roomMatch.type}, ความจุ ${roomMatch.capacity} ที่นั่ง)`;
-  }
-
-  // place match
-  const place = data.places.find((p) => ql.includes(p.name.toLowerCase()));
-  if (place) {
-    const bld = byId(data.buildings, place.buildingId);
-    return `${place.name} อยู่ที่ ${bld?.name} ชั้น ${place.floor} เปิดเวลา ${place.openTime}-${place.closeTime} น.`;
-  }
-
-  // department count
-  const dept = data.departments.find((d) => ql.includes(d.name.toLowerCase()));
-  if (dept) {
-    const count = data.teachers.filter((t) => t.departmentId === dept.id).length;
-    return `สาขา${dept.name} มีอาจารย์ทั้งหมด ${count} ท่านในระบบ`;
-  }
-
-  // simple routing
-  if (ql.includes("ไป") && (ql.includes("ยังไง") || ql.includes("อย่างไร") || ql.includes("เดินทาง"))) {
-    const fromB = data.buildings.find((b) => ql.includes(b.name.toLowerCase()));
-    const toPlace = data.places.find((p) => ql.includes(p.name.toLowerCase()));
-    if (fromB && toPlace) {
-      const toB = byId(data.buildings, toPlace.buildingId);
-      return `จาก ${fromB.name} เดินไปยัง ${toPlace.name} ที่ ${toB?.name} ชั้น ${toPlace.floor} ได้โดยตรง (ดูเส้นทางแบบภาพได้ที่หน้าแผนผัง)`;
+    // place match
+    const place = places.find((p) => ql.includes(norm(p.name)));
+    if (place) {
+      const bld = byId(buildings, place.buildingId);
+      return `${place.name} อยู่ที่ ${bld?.name} ชั้น ${place.floor} เปิดเวลา ${place.openTime}-${place.closeTime} น.`;
     }
-  }
 
-  return "ขออภัย ไม่พบข้อมูลนี้ในระบบ กรุณาติดต่อผู้ดูแลคณะ";
+    // department count
+    const dept = departments.find((d) => ql.includes(norm(d.name)));
+    if (dept) {
+      const count = teachers.filter((t) => t.departmentId === dept.id).length;
+      return `สาขา${dept.name} มีอาจารย์ทั้งหมด ${count} ท่านในระบบ`;
+    }
+
+    // simple routing
+    if (ql.includes("ไป") && (ql.includes("ยังไง") || ql.includes("อย่างไร") || ql.includes("เดินทาง"))) {
+      const fromB = buildings.find((b) => ql.includes(norm(b.name)));
+      const toPlace = places.find((p) => ql.includes(norm(p.name)));
+      if (fromB && toPlace) {
+        const toB = byId(buildings, toPlace.buildingId);
+        return `จาก ${fromB.name} เดินไปยัง ${toPlace.name} ที่ ${toB?.name} ชั้น ${toPlace.floor} ได้โดยตรง (ดูเส้นทางแบบภาพได้ที่หน้าแผนผัง)`;
+      }
+    }
+
+    return "ขออภัย ไม่พบข้อมูลนี้ในระบบ กรุณาติดต่อผู้ดูแลคณะครับ/ค่ะ";
+  } catch (e) {
+    return "ขออภัย เกิดข้อผิดพลาดในการค้นหาข้อมูล กรุณาลองถามใหม่ด้วยคำอื่น หรือติดต่อผู้ดูแลคณะครับ/ค่ะ";
+  }
 }
 
 function ChatbotPanel({ data, embedded = false, onClose, goto }) {
