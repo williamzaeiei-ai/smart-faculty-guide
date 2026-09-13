@@ -444,6 +444,31 @@ function seedData() {
   };
 }
 
+/* Merges any Supabase payload with a complete default structure so a missing,
+   empty, or malformed payload can never crash the UI (white screen). */
+function normalizeData(payload) {
+  const seed = seedData();
+  const src = payload && typeof payload === "object" ? payload : {};
+
+  const srcSettings = src.settings && typeof src.settings === "object" ? src.settings : {};
+  const settings = { ...seed.settings, ...srcSettings };
+  if (!Array.isArray(settings.features) || settings.features.length === 0) {
+    settings.features = DEFAULT_FEATURES;
+  }
+  settings.heroSlideshowImages = Array.isArray(settings.heroSlideshowImages) ? settings.heroSlideshowImages : [];
+
+  return {
+    departments: Array.isArray(src.departments) ? src.departments : seed.departments,
+    buildings: Array.isArray(src.buildings) ? src.buildings : seed.buildings,
+    classrooms: Array.isArray(src.classrooms) ? src.classrooms : seed.classrooms,
+    teachers: Array.isArray(src.teachers) ? src.teachers : seed.teachers,
+    schedules: Array.isArray(src.schedules) ? src.schedules : seed.schedules,
+    places: Array.isArray(src.places) ? src.places : seed.places,
+    gallery: Array.isArray(src.gallery) ? src.gallery : seed.gallery,
+    settings,
+  };
+}
+
 /* =========================================================================
    STORAGE HOOK
    ========================================================================= */
@@ -452,6 +477,7 @@ function useFacultyData() {
   const [status, setStatus] = useState("loading"); // loading | ready | error
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [loadNotice, setLoadNotice] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -471,7 +497,7 @@ function useFacultyData() {
       if (error) throw error;
 
       if (row && row.payload) {
-        setData(row.payload);
+        setData(normalizeData(row.payload));
       } else {
         // First run: no row yet -> seed Supabase with the default demo data
         const seed = seedData();
@@ -493,14 +519,16 @@ function useFacultyData() {
           if (!cancelled) setStatus("ready");
         } catch (e) {
           if (!cancelled) {
-            setStatus("error");
-            setSaveError("เชื่อมต่อ Supabase ไม่สำเร็จ (โปรเจกต์อาจถูกหยุดชั่วคราว/ออฟไลน์ หรือยังไม่ได้รันไฟล์ supabase_schema.sql) — ตรวจสอบการตั้งค่า VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY แล้วลองใหม่");
+            setData(seedData());
+            setStatus("ready");
+            setLoadNotice("เชื่อมต่อ Supabase ไม่สำเร็จ (โปรเจกต์อาจถูกหยุดชั่วคราว/ออฟไลน์ หรือยังไม่ได้รันไฟล์ supabase_schema.sql) — เว็บจะแสดงข้อมูลตัวอย่างแทน เพื่อให้ใช้งานได้ตามปกติ");
           }
         }
       } else {
         if (!cancelled) {
-          setStatus("error");
-          setSaveError("ยังไม่ได้ตั้งค่า Supabase — กำหนด VITE_SUPABASE_URL และ VITE_SUPABASE_ANON_KEY ในไฟล์ .env ก่อนใช้งาน");
+          setData(seedData());
+          setStatus("ready");
+          setLoadNotice("ยังไม่ได้ตั้งค่า Supabase — กำหนด VITE_SUPABASE_URL และ VITE_SUPABASE_ANON_KEY ในไฟล์ .env แล้วลองใหม่ ขณะนี้แสดงข้อมูลตัวอย่างแทน");
         }
       }
     })();
@@ -530,7 +558,7 @@ function useFacultyData() {
     }
   };
 
-  return { data, status, saving, saveError, persist };
+  return { data, status, saving, saveError, loadNotice, persist };
 }
 
 /* =========================================================================
@@ -2496,13 +2524,18 @@ function SettingsForm({ settings, onSave }) {
    ROOT APP
    ========================================================================= */
 export default function App() {
-  const { data, status, saving, saveError, persist } = useFacultyData();
+  const { data, status, saving, saveError, loadNotice, persist } = useFacultyData();
   const [page, setPage] = useState({ name: "home", id: null });
   const [query, setQuery] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
   const [theme, setTheme] = useState("light");
   const [chatFloatOpen, setChatFloatOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [noticeHidden, setNoticeHidden] = useState(false);
+
+  useEffect(() => {
+    setNoticeHidden(false);
+  }, [loadNotice]);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 40);
@@ -2537,21 +2570,6 @@ export default function App() {
   };
 
   const onSearchSubmit = () => goto("search");
-
-  if (status === "error" && !data) {
-    return (
-      <div className="sfg-app" style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-        <GlobalStyle />
-        <div style={{ textAlign: "center", color: "var(--danger)", maxWidth: 560 }}>
-          <AlertCircle size={30} style={{ marginBottom: 12, opacity: 0.85 }} />
-          <div style={{ fontSize: 15, lineHeight: 1.6 }}>
-            ไม่สามารถโหลดข้อมูลจาก Supabase ได้<br />
-            <span style={{ color: "var(--ink-soft)", fontSize: 13.5 }}>{saveError}</span>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   if (status === "loading" || !data) {
     return (
@@ -2598,6 +2616,15 @@ export default function App() {
   return (
     <div className="sfg-app" data-theme={theme} style={{ minHeight: "100vh" }}>
       <GlobalStyle />
+      {loadNotice && !noticeHidden && (
+        <div style={{ background: "var(--accent)", color: "#1B160A", fontSize: 13, padding: "10px 20px", display: "flex", justifyContent: "center", alignItems: "center", gap: 10, textAlign: "center" }}>
+          <AlertCircle size={15} style={{ flexShrink: 0 }} />
+          <span style={{ lineHeight: 1.5 }}>{loadNotice}</span>
+          <button onClick={() => setNoticeHidden(true)} style={{ background: "none", border: "none", color: "inherit", cursor: "pointer", padding: 2, flexShrink: 0 }} title="ปิดแจ้งเตือน">
+            <X size={15} />
+          </button>
+        </div>
+      )}
       <Navbar
         page={page.name}
         goto={goto}
