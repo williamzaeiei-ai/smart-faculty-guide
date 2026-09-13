@@ -33,5 +33,30 @@ create policy "Public update access"
   on app_data for update
   using (true);
 
+-- ============================================================
+-- Storage bucket for uploaded images/videos
+-- (สำคัญมาก: ถ้าไม่มีส่วนนี้ รูปภาพจะถูกฝังเป็น base64 ในตาราง app_data
+--  โดยตรง ซึ่งทำให้ไฟล์ข้อมูลใหญ่เกินไปจนบันทึกไม่สำเร็จ/ค้าง 500 error)
+-- ============================================================
+
+insert into storage.buckets (id, name, public)
+values ('media', 'media', true)
+on conflict (id) do nothing;
+
+drop policy if exists "Public read for media bucket" on storage.objects;
+create policy "Public read for media bucket"
+  on storage.objects for select
+  using (bucket_id = 'media');
+
+drop policy if exists "Public insert for media bucket" on storage.objects;
+create policy "Public insert for media bucket"
+  on storage.objects for insert
+  with check (bucket_id = 'media');
+
+drop policy if exists "Public update for media bucket" on storage.objects;
+create policy "Public update for media bucket"
+  on storage.objects for update
+  using (bucket_id = 'media');
+
 -- หมายเหตุ: ไม่ต้อง insert ข้อมูลเริ่มต้นเอง — แอปจะสร้างแถวแรกให้อัตโนมัติ
 -- ตอนเปิดเว็บครั้งแรก (ถ้ายังไม่มีแถว id = 1 ในตาราง)

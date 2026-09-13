@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { supabase, isSupabaseConfigured, APP_DATA_ROW_ID } from "./supabaseClient.js";
+import { supabase, isSupabaseConfigured, APP_DATA_ROW_ID, uploadMedia, withTimeout, SUPABASE_TIMEOUT_MS } from "./supabaseClient.js";
 import {
   Search, User, Building2, DoorOpen, MapPin, Calendar, Bot, LogIn,
   LayoutDashboard, Plus, Pencil, Trash2, X, Menu, ChevronRight, ChevronLeft,
@@ -111,8 +111,9 @@ const GlobalStyle = () => (
     .sfg-hero-stats { margin-top: -70px; }
 
     .sfg-gallery-tile { position: relative; }
-    .sfg-thumb-img { transition: transform .4s ease; }
-    .sfg-gallery-tile:hover .sfg-thumb-img { transform: scale(1.12); }
+    @keyframes sfg-kenburns { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.08); } }
+    .sfg-gallery-tile .sfg-thumb-img { animation: sfg-kenburns 11s ease-in-out infinite; transition: transform .5s ease; }
+    .sfg-gallery-tile:hover .sfg-thumb-img { animation-play-state: paused; transform: scale(1.15) !important; }
     .sfg-gallery-caption {
       position: absolute; inset: auto 0 0 0; padding: 18px 10px 8px;
       background: linear-gradient(to top, rgba(0,0,0,0.75), transparent);
@@ -170,6 +171,29 @@ const DAYS = ["จันทร์", "อังคาร", "พุธ", "พฤ�
 const STORAGE_KEY = "smart-faculty-guide-data-v1";
 const ADMIN_USER = "admin";
 const ADMIN_PASS = "faculty2026";
+
+/* =========================================================================
+   FILE SIZE LIMITS
+   ========================================================================= */
+const MAX_IMAGE_MB = 2;
+const MAX_VIDEO_MB = 10;
+const MAX_IMAGE_BYTES = MAX_IMAGE_MB * 1024 * 1024;
+const MAX_VIDEO_BYTES = MAX_VIDEO_MB * 1024 * 1024;
+
+function formatFileSize(bytes) {
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes >= 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${bytes} B`;
+}
+
+function validateMediaFile(file, maxMB) {
+  if (!file) return null;
+  const maxBytes = maxMB * 1024 * 1024;
+  if (file.size > maxBytes) {
+    return `ไฟล์ใหญ่เกินไป (${formatFileSize(file.size)}) — ขนาดไม่เกิน ${maxMB} MB`;
+  }
+  return null;
+}
 
 const PLACE_TYPES = {
   food: { label: "ร้านอาหาร/โรงอาหาร", icon: UtensilsCrossed, color: "#B0492E" },
@@ -231,29 +255,85 @@ function isVideoMedia(url) {
   return /\.(mp4|webm|ogg)(\?|#|$)/i.test(url);
 }
 
-/* Renders the hero "Motion Cover": a looping muted video, an animated GIF, or (if motion is off /
-   no media set) nothing — the caller supplies the static gradient fallback behind this. */
-function HeroMedia({ url, enabled, overlayOpacity = 55 }) {
-  if (!enabled || !url) return null;
-  const isVideo = isVideoMedia(url);
+/* Figures out which hero background mode to use, staying compatible with
+   settings saved before the slideshow feature existed. */
+function resolveHeroBgMode(settings) {
+  if (settings.heroBgMode === "slideshow" && (settings.heroSlideshowImages || []).filter(Boolean).length > 0) {
+    return "slideshow";
+  }
+  if (settings.heroBgMode === "media" && settings.heroMediaUrl) return "media";
+  if (!settings.heroBgMode && settings.heroMotionEnabled && settings.heroMediaUrl) return "media"; // legacy data
+  return "gradient";
+}
+
+/* Auto-advancing crossfade slideshow: up to 4 images, smooth fade transition, configurable delay. */
+function HeroSlideshow({ images, intervalSec = 5, overlayOpacity = 55 }) {
+  const [index, setIndex] = useState(0);
+  const list = (images || []).filter(Boolean);
+
+  useEffect(() => {
+    if (list.length < 2) return;
+    const id = setInterval(() => {
+      setIndex((i) => (i + 1) % list.length);
+    }, Math.max(2, intervalSec) * 1000);
+    return () => clearInterval(id);
+  }, [list.length, intervalSec]);
+
+  if (list.length === 0) return null;
+
   return (
     <>
-      {isVideo ? (
-        <video
-          autoPlay loop muted playsInline
-          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
-          src={url}
-        />
-      ) : (
+      {list.map((src, i) => (
         <img
-          src={url}
+          key={i}
+          src={src}
           alt=""
-          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
+          style={{
+            position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover",
+            opacity: i === index ? 1 : 0,
+            transition: "opacity 1.4s ease",
+          }}
         />
-      )}
+      ))}
       <div style={{ position: "absolute", inset: 0, background: `rgba(10,14,26,${Math.min(Math.max(overlayOpacity, 0), 100) / 100})` }} />
     </>
   );
+}
+
+/* Renders the hero "Motion Cover" background: a looping muted video/GIF, a 4-image auto-slideshow,
+   or nothing (caller supplies the static gradient fallback in that case). */
+function HeroBackground({ settings }) {
+  const mode = resolveHeroBgMode(settings);
+  const overlayOpacity = settings.heroOverlayOpacity ?? 55;
+
+  if (mode === "slideshow") {
+    return <HeroSlideshow images={settings.heroSlideshowImages} intervalSec={settings.heroSlideInterval || 5} overlayOpacity={overlayOpacity} />;
+  }
+
+  if (mode === "media") {
+    const url = settings.heroMediaUrl;
+    const isVideo = isVideoMedia(url);
+    return (
+      <>
+        {isVideo ? (
+          <video
+            autoPlay loop muted playsInline
+            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
+            src={url}
+          />
+        ) : (
+          <img
+            src={url}
+            alt=""
+            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
+          />
+        )}
+        <div style={{ position: "absolute", inset: 0, background: `rgba(10,14,26,${Math.min(Math.max(overlayOpacity, 0), 100) / 100})` }} />
+      </>
+    );
+  }
+
+  return null; // gradient fallback is rendered by the caller
 }
 
 function uid(prefix) {
@@ -351,6 +431,9 @@ function seedData() {
       heroSubtext: "ค้นหาอาจารย์ สาขา ห้องเรียน อาคาร ตารางสอน และสถานที่สำคัญภายในคณะ พร้อม AI Assistant",
       heroMotionEnabled: false,
       heroMediaUrl: "",
+      heroBgMode: "gradient", // "gradient" | "media" | "slideshow"
+      heroSlideshowImages: [],
+      heroSlideInterval: 5,
       heroOverlayOpacity: 55,
       heroCtaText: "ดูข้อมูลเพิ่มเติม",
       heroCtaTarget: "departments",
@@ -376,11 +459,14 @@ function useFacultyData() {
     let cancelled = false;
 
     async function loadFromSupabase() {
-      const { data: row, error } = await supabase
-        .from("app_data")
-        .select("payload")
-        .eq("id", APP_DATA_ROW_ID)
-        .maybeSingle();
+      const { data: row, error } = await withTimeout(
+        supabase
+          .from("app_data")
+          .select("payload")
+          .eq("id", APP_DATA_ROW_ID)
+          .maybeSingle(),
+        SUPABASE_TIMEOUT_MS
+      );
 
       if (cancelled) return;
 
@@ -392,9 +478,12 @@ function useFacultyData() {
         // First run: no row yet -> seed Supabase with the default demo data
         const seed = seedData();
         setData(seed);
-        const { error: insertError } = await supabase
-          .from("app_data")
-          .insert({ id: APP_DATA_ROW_ID, payload: seed });
+        const { error: insertError } = await withTimeout(
+          supabase
+            .from("app_data")
+            .insert({ id: APP_DATA_ROW_ID, payload: seed }),
+          SUPABASE_TIMEOUT_MS
+        );
         if (insertError) throw insertError;
       }
     }
@@ -420,11 +509,11 @@ function useFacultyData() {
           await loadFromSupabase();
           if (!cancelled) setBackend("supabase");
         } catch (e) {
-          // Supabase reachable-but-misconfigured (e.g. table/policy missing) -> fall back locally
+          // Supabase unreachable (paused/offline) or misconfigured -> fall back locally
           if (!cancelled) {
             loadFromLocalStorage();
             setBackend("local");
-            setSaveError("เชื่อมต่อ Supabase ไม่สำเร็จ (ตรวจสอบว่ารันไฟล์ supabase_schema.sql แล้ว) กำลังใช้ข้อมูลในเครื่องแทนชั่วคราว");
+            setSaveError("เชื่อมต่อ Supabase ไม่สำเร็จ (โปรเจกต์อาจถูกหยุดชั่วคราว/ออฟไลน์ หรือยังไม่ได้รันไฟล์ supabase_schema.sql) — กำลังใช้ข้อมูลในเครื่องแทน");
           }
         }
       } else {
@@ -441,21 +530,36 @@ function useFacultyData() {
     setSaving(true);
     try {
       if (backend === "supabase") {
-        const { error } = await supabase
-          .from("app_data")
-          .update({ payload: nextData, updated_at: new Date().toISOString() })
-          .eq("id", APP_DATA_ROW_ID);
+        const { error } = await withTimeout(
+          supabase
+            .from("app_data")
+            .update({ payload: nextData, updated_at: new Date().toISOString() })
+            .eq("id", APP_DATA_ROW_ID),
+          SUPABASE_TIMEOUT_MS
+        );
         if (error) throw error;
+        setSaveError("");
       } else {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(nextData));
+        setSaveError("");
       }
-      setSaveError("");
     } catch (e) {
-      setSaveError(
-        backend === "supabase"
-          ? "บันทึกขึ้น Supabase ไม่สำเร็จ: ตรวจสอบการเชื่อมต่ออินเทอร์เน็ตหรือสิทธิ์ (RLS policy) ในตาราง app_data"
-          : "บันทึกไม่สำเร็จ: พื้นที่จัดเก็บของเบราว์เซอร์อาจเต็ม (มักเกิดจากอัปโหลดรูป/วิดีโอขนาดใหญ่เกินไป) ลองใช้รูปที่มีขนาดไฟล์เล็กลง"
-      );
+      if (backend === "supabase") {
+        // Supabase offline / ใช้งานไม่ได้ -> อัปเดตข้อมูลเข้า localStorage และสลับโหมดเป็น local อัตโนมัติ
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(nextData));
+          setBackend("local");
+          setSaveError("Supabase ไม่สามารถเชื่อมต่อได้ เปลี่ยนไปบันทึกในเครื่อง (localStorage) แล้ว — ข้อมูลยังอยู่เฉพาะบนเครื่องนี้เท่านั้น");
+        } catch (e2) {
+          setSaveError(
+            "บันทึกไม่สำเร็จ: พื้นที่จัดเก็บของเบราว์เซอร์อาจเต็ม (มักเกิดจากอัปโหลดรูป/วิดีโอขนาดใหญ่เกินไป) ลองใช้รูปที่มีขนาดไฟล์เล็กลง"
+          );
+        }
+      } else {
+        setSaveError(
+          "บันทึกไม่สำเร็จ: พื้นที่จัดเก็บของเบราว์เซอร์อาจเต็ม (มักเกิดจากอัปโหลดรูป/วิดีโอขนาดใหญ่เกินไป) ลองใช้รูปที่มีขนาดไฟล์เล็กลง"
+        );
+      }
     } finally {
       setSaving(false);
     }
@@ -467,14 +571,6 @@ function useFacultyData() {
 /* =========================================================================
    SMALL HELPERS
    ========================================================================= */
-function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
 function getYoutubeEmbedUrl(url) {
   if (!url) return null;
   const patterns = [
@@ -508,9 +604,10 @@ function isTeacherAvailableNow(teacher) {
 
 /* Thumbnail block: shows the real uploaded/URL image when present, otherwise a colored icon placeholder */
 function Thumb({ icon: Icon = ImageIcon, label, aspect = "16/9", size = 28, src, accent, className = "" }) {
+  const sizeStyle = aspect === "auto" ? { width: "100%", height: "100%" } : { width: "100%", aspectRatio: aspect };
   if (src) {
     return (
-      <div className={className} style={{ width: "100%", aspectRatio: aspect, position: "relative", overflow: "hidden", background: "var(--surface-2)" }}>
+      <div className={className} style={{ ...sizeStyle, position: "relative", overflow: "hidden", background: "var(--surface-2)" }}>
         <img src={src} alt={label || ""} className="sfg-thumb-img" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
         {label && (
           <span style={{ position: "absolute", bottom: 8, left: 10, fontSize: 11, fontWeight: 600, color: "#fff", background: "rgba(0,0,0,0.45)", padding: "2px 8px", borderRadius: 999 }}>{label}</span>
@@ -522,7 +619,7 @@ function Thumb({ icon: Icon = ImageIcon, label, aspect = "16/9", size = 28, src,
     ? `linear-gradient(135deg, ${accent}CC, ${accent})`
     : "linear-gradient(135deg, var(--primary-soft), var(--primary))";
   return (
-    <div className={className} style={{ width: "100%", aspectRatio: aspect, position: "relative", display: "flex", alignItems: "center", justifyContent: "center", background: bg, color: "#fff", overflow: "hidden" }}>
+    <div className={className} style={{ ...sizeStyle, position: "relative", display: "flex", alignItems: "center", justifyContent: "center", background: bg, color: "#fff", overflow: "hidden" }}>
       <div style={{ position: "absolute", inset: 0, backgroundImage: "radial-gradient(circle, rgba(255,255,255,0.16) 1.5px, transparent 1.5px)", backgroundSize: "16px 16px", opacity: 0.7 }} />
       <Icon size={size} strokeWidth={1.5} className="sfg-thumb-img" style={{ position: "relative" }} />
       {label && (
@@ -700,22 +797,39 @@ function Navbar({ page, goto, isAdmin, onLogout, theme, toggleTheme, settings, q
       </div>
 
       {menuOpen && (
-        <div style={{ borderTop: "1px solid var(--border)", background: "var(--surface)" }}>
-          <div style={{ maxWidth: 1180, margin: "0 auto", padding: "12px 20px", display: "flex", flexWrap: "wrap", gap: 6 }}>
-            {links.map((l) => (
-              <button
-                key={l.key}
-                onClick={() => gotoAndClose(l.key)}
-                className="sfg-btn"
-                style={{
-                  background: page === l.key ? "var(--surface-2)" : "transparent",
-                  color: page === l.key ? "var(--primary)" : "var(--ink-soft)",
-                  border: "1px solid " + (page === l.key ? "var(--primary)" : "var(--border)"),
-                }}
-              >
-                <l.icon size={14} /> {l.label}
-              </button>
-            ))}
+        <div style={{
+          background: overlay ? "rgba(10,14,26,0.72)" : "var(--surface)",
+          backdropFilter: overlay ? "blur(6px)" : "none",
+          borderTop: overlay ? "1px solid rgba(255,255,255,0.15)" : "1px solid var(--border)",
+        }}>
+          <div style={{ maxWidth: 1180, margin: "0 auto", padding: "16px 20px 20px", display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))", gap: 8 }}>
+            {links.map((l) => {
+              const active = page === l.key;
+              return (
+                <button
+                  key={l.key}
+                  onClick={() => gotoAndClose(l.key)}
+                  className="sfg-btn"
+                  style={{
+                    justifyContent: "flex-start",
+                    padding: "13px 16px",
+                    fontSize: 14.5,
+                    fontWeight: 600,
+                    background: active
+                      ? (overlay ? "rgba(255,255,255,0.22)" : "var(--surface-2)")
+                      : (overlay ? "rgba(255,255,255,0.08)" : "transparent"),
+                    color: active
+                      ? (overlay ? "#fff" : "var(--primary)")
+                      : (overlay ? "rgba(255,255,255,0.9)" : "var(--ink-soft)"),
+                    border: "1px solid " + (active
+                      ? (overlay ? "rgba(255,255,255,0.5)" : "var(--primary)")
+                      : (overlay ? "rgba(255,255,255,0.18)" : "var(--border)")),
+                  }}
+                >
+                  <l.icon size={17} /> {l.label}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
@@ -736,12 +850,14 @@ function HomePage({ data, goto, query, setQuery, onSearchSubmit, navOverlay }) {
     color: FEATURE_COLORS[i % FEATURE_COLORS.length],
   }));
 
+  const heroHasBg = resolveHeroBgMode(data.settings) !== "gradient";
+
   return (
     <div>
       {/* HERO — Motion Cover */}
       <div style={{ position: "relative", overflow: "hidden", background: "linear-gradient(160deg, var(--primary) 0%, var(--primary-soft) 60%, var(--accent) 160%)", borderBottom: "1px solid var(--border)" }}>
-        <HeroMedia url={data.settings.heroMediaUrl} enabled={data.settings.heroMotionEnabled} overlayOpacity={data.settings.heroOverlayOpacity} />
-        {!(data.settings.heroMotionEnabled && data.settings.heroMediaUrl) && (
+        <HeroBackground settings={data.settings} />
+        {!heroHasBg && (
           <>
             <div className="sfg-dotted-bg" style={{ position: "absolute", inset: 0, opacity: 0.5 }} />
             <div style={{ position: "absolute", width: 380, height: 380, borderRadius: "50%", background: "rgba(255,255,255,0.07)", top: -180, left: -120 }} />
@@ -826,16 +942,20 @@ function HomePage({ data, goto, query, setQuery, onSearchSubmit, navOverlay }) {
         {data.gallery && data.gallery.length > 0 && (
           <>
             <SectionTitle eyebrow="แกลเลอรี" title="ภาพแนะนำ" />
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(160px,1fr))", gap: 12 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))", gridAutoRows: 130, gap: 14, gridAutoFlow: "dense" }}>
               {data.gallery.map((g, i) => (
                 <div
                   key={g.id}
                   className="sfg-card sfg-card-hover sfg-gallery-tile"
-                  style={{ border: "none", padding: 0, cursor: "default" }}
+                  style={{
+                    border: "none", padding: 0, cursor: "default",
+                    gridColumn: i === 0 ? "span 2" : "span 1",
+                    gridRow: i === 0 ? "span 2" : "span 1",
+                  }}
                   title={g.caption}
                 >
-                  <Thumb icon={ImageIcon} src={g.image} accent={DEPT_PALETTE[i % DEPT_PALETTE.length]} aspect="1/1" size={22} />
-                  {g.caption && <div className="sfg-gallery-caption">{g.caption}</div>}
+                  <Thumb icon={ImageIcon} src={g.image} accent={DEPT_PALETTE[i % DEPT_PALETTE.length]} aspect="auto" size={i === 0 ? 34 : 22} className="sfg-gallery-media" />
+                  {g.caption && <div className="sfg-gallery-caption" style={{ fontSize: i === 0 ? 15 : 11 }}>{g.caption}</div>}
                 </div>
               ))}
             </div>
@@ -1692,7 +1812,8 @@ function AdminLoginPage({ onLogin, goto }) {
 /* =========================================================================
    ADMIN — GENERIC CRUD TABLE
    ========================================================================= */
-function GenericAdminTable({ title, items, fields, onAdd, onUpdate, onDelete, renderTitle }) {
+function GenericAdminTable({ title, items, fields, onAdd, onUpdate, onDelete, renderTitle, backend }) {
+  const [imgError, setImgError] = useState("");
   const emptyForm = () => Object.fromEntries(fields.map((f) => [f.key, f.default !== undefined ? f.default : ""]));
   const [form, setForm] = useState(emptyForm());
   const [editingId, setEditingId] = useState(null);
@@ -1751,13 +1872,24 @@ function GenericAdminTable({ title, items, fields, onAdd, onUpdate, onDelete, re
                       onChange={async (e) => {
                         const file = e.target.files?.[0];
                         if (!file) return;
+                        const msg = validateMediaFile(file, MAX_IMAGE_MB);
+                        if (msg) {
+                          setImgError(msg);
+                          e.target.value = "";
+                          return;
+                        }
+                        setImgError("");
                         try {
-                          const b64 = await fileToBase64(file);
-                          setForm((prev) => ({ ...prev, [f.key]: b64 }));
-                        } catch (err) { /* ignore read errors */ }
+                          const url = await uploadMedia(file, { maxBytes: MAX_IMAGE_BYTES, skipSupabase: backend !== "supabase" });
+                          setForm((prev) => ({ ...prev, [f.key]: url }));
+                        } catch (err) {
+                          setImgError(err.message || "อัปโหลดไฟล์ไม่สำเร็จ");
+                        }
                       }}
                     />
                   </div>
+                  {imgError && <div style={{ fontSize: 12, color: "var(--danger)", margin: "0 0 4px" }}>{imgError}</div>}
+                  <div style={{ fontSize: 11, color: "var(--ink-soft)", marginBottom: 4 }}>รองรับไฟล์ภาพ JPG/PNG/WebP/GIF ขนาดไม่เกิน {MAX_IMAGE_MB} MB</div>
                   <input
                     className="sfg-input"
                     value={form[f.key] && form[f.key].startsWith("data:") ? "" : form[f.key]}
@@ -1931,6 +2063,7 @@ function AdminDashboard({ data, persist, saveError, backend, onLogout, goto }) {
           <GenericAdminTable
             title="อาจารย์"
             items={data.teachers}
+            backend={backend}
             renderTitle={fullName}
             onAdd={addItem("teachers", "t")}
             onUpdate={editItem("teachers")}
@@ -1956,6 +2089,7 @@ function AdminDashboard({ data, persist, saveError, backend, onLogout, goto }) {
           <GenericAdminTable
             title="สาขา"
             items={data.departments}
+            backend={backend}
             renderTitle={(d) => d.name}
             onAdd={addItem("departments", "dep")}
             onUpdate={editItem("departments")}
@@ -1974,6 +2108,7 @@ function AdminDashboard({ data, persist, saveError, backend, onLogout, goto }) {
           <GenericAdminTable
             title="ห้องเรียน"
             items={data.classrooms}
+            backend={backend}
             renderTitle={(c) => `ห้อง ${c.number}`}
             onAdd={addItem("classrooms", "c")}
             onUpdate={editItem("classrooms")}
@@ -1995,6 +2130,7 @@ function AdminDashboard({ data, persist, saveError, backend, onLogout, goto }) {
           <GenericAdminTable
             title="อาคาร"
             items={data.buildings}
+            backend={backend}
             renderTitle={(b) => b.name}
             onAdd={addItem("buildings", "b")}
             onUpdate={editItem("buildings")}
@@ -2012,6 +2148,7 @@ function AdminDashboard({ data, persist, saveError, backend, onLogout, goto }) {
           <GenericAdminTable
             title="สถานที่"
             items={data.places}
+            backend={backend}
             renderTitle={(p) => p.name}
             onAdd={addItem("places", "p")}
             onUpdate={editItem("places")}
@@ -2034,6 +2171,7 @@ function AdminDashboard({ data, persist, saveError, backend, onLogout, goto }) {
           <GenericAdminTable
             title="รูปภาพแนะนำ (แกลเลอรี)"
             items={data.gallery || []}
+            backend={backend}
             renderTitle={(g) => g.caption || "ไม่มีคำบรรยาย"}
             onAdd={addItem("gallery", "g")}
             onUpdate={editItem("gallery")}
@@ -2049,6 +2187,7 @@ function AdminDashboard({ data, persist, saveError, backend, onLogout, goto }) {
           <GenericAdminTable
             title="ตารางสอน"
             items={data.schedules}
+            backend={backend}
             renderTitle={(s) => s.subject}
             onAdd={addItem("schedules", "s")}
             onUpdate={editItem("schedules")}
@@ -2065,7 +2204,7 @@ function AdminDashboard({ data, persist, saveError, backend, onLogout, goto }) {
         )}
 
         {tab === "settings" && (
-          <SettingsForm settings={data.settings} onSave={(s) => persist({ ...data, settings: s })} />
+          <SettingsForm settings={data.settings} backend={backend} onSave={(s) => persist({ ...data, settings: s })} />
         )}
       </div>
     </div>
@@ -2073,8 +2212,11 @@ function AdminDashboard({ data, persist, saveError, backend, onLogout, goto }) {
   );
 }
 
-function SettingsForm({ settings, onSave }) {
+function SettingsForm({ settings, onSave, backend }) {
   const [form, setForm] = useState(settings);
+  const [logoError, setLogoError] = useState("");
+  const [heroError, setHeroError] = useState("");
+  const [slideErrors, setSlideErrors] = useState([]);
   useEffect(() => setForm(settings), [settings]);
   const save = (e) => { e.preventDefault(); onSave(form); };
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
@@ -2100,10 +2242,17 @@ function SettingsForm({ settings, onSave }) {
             onChange={async (e) => {
               const file = e.target.files?.[0];
               if (!file) return;
+              const msg = validateMediaFile(file, MAX_IMAGE_MB);
+              if (msg) {
+                setLogoError(msg);
+                e.target.value = "";
+                return;
+              }
+              setLogoError("");
               try {
-                const b64 = await fileToBase64(file);
-                setForm((prev) => ({ ...prev, logoImage: b64 }));
-              } catch (err) { /* ignore */ }
+                const url = await uploadMedia(file, { maxBytes: MAX_IMAGE_BYTES, skipSupabase: backend !== "supabase" });
+                setForm((prev) => ({ ...prev, logoImage: url }));
+              } catch (err) { setLogoError(err.message || "อัปโหลดไฟล์ไม่สำเร็จ"); }
             }}
           />
           {form.logoImage && (
@@ -2112,6 +2261,8 @@ function SettingsForm({ settings, onSave }) {
             </button>
           )}
         </div>
+        {logoError && <div style={{ fontSize: 12, color: "var(--danger)", marginTop: 4 }}>{logoError}</div>}
+        <div style={{ fontSize: 11, color: "var(--ink-soft)", marginTop: 4 }}>รองรับไฟล์ภาพ JPG/PNG/WebP/GIF ขนาดไม่เกิน {MAX_IMAGE_MB} MB</div>
       </div>
 
       {[
@@ -2125,67 +2276,175 @@ function SettingsForm({ settings, onSave }) {
       ))}
 
       <div style={{ borderTop: "1px solid var(--border)", marginTop: 8, paddingTop: 16 }}>
-        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 2 }}>Hero Motion Cover (หน้าปกเคลื่อนไหว)</div>
-        <div style={{ fontSize: 12, color: "var(--ink-soft)", marginBottom: 12 }}>อัปโหลดวิดีโอ/GIF พื้นหลังหน้าแรก พร้อมปรับความทึบและปุ่ม CTA</div>
+        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 2 }}>Hero Motion Cover (พื้นหลังหน้าปก)</div>
+        <div style={{ fontSize: 12, color: "var(--ink-soft)", marginBottom: 12 }}>เลือกรูปแบบพื้นหลังหน้าแรก พร้อมปรับความทึบและปุ่ม CTA</div>
 
-        <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, cursor: "pointer" }}>
-          <input
-            type="checkbox"
-            checked={!!form.heroMotionEnabled}
-            onChange={(e) => setForm({ ...form, heroMotionEnabled: e.target.checked })}
-          />
-          <span style={{ fontSize: 13 }}>เปิดใช้งาน Motion Cover (ถ้าปิด จะใช้พื้นหลังไล่สีแบบเดิม)</span>
-        </label>
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ fontSize: 12, color: "var(--ink-soft)", display: "block", marginBottom: 6 }}>รูปแบบพื้นหลัง</label>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {[
+              ["gradient", "ไล่สี (ค่าเริ่มต้น)"],
+              ["media", "วิดีโอ/GIF (1 ไฟล์)"],
+              ["slideshow", "สไลด์โชว์ (สูงสุด 4 ภาพ)"],
+            ].map(([val, label]) => (
+              <button
+                key={val}
+                type="button"
+                onClick={() => setForm({ ...form, heroBgMode: val })}
+                className="sfg-btn"
+                style={{
+                  border: "1px solid " + ((form.heroBgMode || "gradient") === val ? "var(--primary)" : "var(--border)"),
+                  background: (form.heroBgMode || "gradient") === val ? "var(--primary)" : "var(--surface)",
+                  color: (form.heroBgMode || "gradient") === val ? "var(--on-primary)" : "var(--ink)",
+                  fontSize: 12.5,
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
 
-        <div style={{ marginBottom: 12 }}>
-          <label style={{ fontSize: 12, color: "var(--ink-soft)", display: "block", marginBottom: 4 }}>ไฟล์ Motion Media (MP4 / WebM / GIF)</label>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-            {form.heroMediaUrl ? (
-              isVideoMedia(form.heroMediaUrl) ? (
-                <video src={form.heroMediaUrl} muted style={{ width: 64, height: 40, objectFit: "cover", borderRadius: 6, border: "1px solid var(--border)" }} />
+        {form.heroBgMode === "media" && (
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ fontSize: 12, color: "var(--ink-soft)", display: "block", marginBottom: 4 }}>ไฟล์ Motion Media (MP4 / WebM / GIF)</label>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+              {form.heroMediaUrl ? (
+                isVideoMedia(form.heroMediaUrl) ? (
+                  <video src={form.heroMediaUrl} muted style={{ width: 64, height: 40, objectFit: "cover", borderRadius: 6, border: "1px solid var(--border)" }} />
+                ) : (
+                  <img src={form.heroMediaUrl} alt="" style={{ width: 64, height: 40, objectFit: "cover", borderRadius: 6, border: "1px solid var(--border)" }} />
+                )
               ) : (
-                <img src={form.heroMediaUrl} alt="" style={{ width: 64, height: 40, objectFit: "cover", borderRadius: 6, border: "1px solid var(--border)" }} />
-              )
-            ) : (
-              <div style={{ width: 64, height: 40, borderRadius: 6, border: "1px dashed var(--border)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--ink-soft)" }}>
-                <VideoIcon size={16} />
+                <div style={{ width: 64, height: 40, borderRadius: 6, border: "1px dashed var(--border)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--ink-soft)" }}>
+                  <VideoIcon size={16} />
+                </div>
+              )}
+              <input
+                type="file"
+                accept="video/mp4,video/webm,image/gif"
+                className="sfg-input"
+                style={{ padding: 6, fontSize: 12 }}
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const msg = validateMediaFile(file, MAX_VIDEO_MB);
+                  if (msg) {
+                    setHeroError(msg);
+                    e.target.value = "";
+                    return;
+                  }
+                  setHeroError("");
+                  try {
+                    const url = await uploadMedia(file, { maxBytes: MAX_VIDEO_BYTES, skipSupabase: backend !== "supabase" });
+                    setForm((prev) => ({ ...prev, heroMediaUrl: url }));
+                  } catch (err) { setHeroError(err.message || "อัปโหลดไฟล์ไม่สำเร็จ"); }
+                }}
+              />
+            </div>
+            <input
+              className="sfg-input"
+              placeholder="หรือวางลิงก์ไฟล์ .mp4 / .webm / .gif โดยตรง"
+              value={form.heroMediaUrl && form.heroMediaUrl.startsWith("data:") ? "" : (form.heroMediaUrl || "")}
+              onChange={(e) => setForm({ ...form, heroMediaUrl: e.target.value })}
+            />
+            {heroError && <div style={{ fontSize: 12, color: "var(--danger)", marginTop: 4 }}>{heroError}</div>}
+            <div style={{ fontSize: 11, color: "var(--ink-soft)", marginTop: 4 }}>
+              รองรับไฟล์ MP4/WebM/GIF ขนาดไม่เกิน {MAX_VIDEO_MB} MB
+              {backend !== "supabase" && " — โหมด localStorage อาจไม่รองรับวิดีโอขนาดใหญ่"}
+            </div>
+          </div>
+        )}
+
+        {form.heroBgMode === "slideshow" && (
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ fontSize: 12, color: "var(--ink-soft)", display: "block", marginBottom: 6 }}>รูปภาพสไลด์โชว์ (สูงสุด 4 ภาพ เปลี่ยนเองอัตโนมัติ)</label>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8, marginBottom: 10 }}>
+              {[0, 1, 2, 3].map((i) => {
+                const imgs = form.heroSlideshowImages || [];
+                const src = imgs[i];
+                return (
+                  <div key={i} style={{ position: "relative" }}>
+                    {src ? (
+                      <div style={{ position: "relative" }}>
+                        <img src={src} alt="" style={{ width: "100%", aspectRatio: "1/1", objectFit: "cover", borderRadius: 8, border: "1px solid var(--border)" }} />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const next = [...(form.heroSlideshowImages || [])];
+                            next[i] = "";
+                            setForm({ ...form, heroSlideshowImages: next });
+                          }}
+                          style={{ position: "absolute", top: 2, right: 2, background: "rgba(0,0,0,0.6)", color: "#fff", border: "none", borderRadius: "50%", width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+                        >
+                          <X size={11} />
+                        </button>
+                      </div>
+                    ) : (
+                      <label style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", width: "100%", aspectRatio: "1/1", borderRadius: 8, border: "1px dashed var(--border)", color: "var(--ink-soft)", cursor: "pointer", gap: 4 }}>
+                        <ImageIcon size={16} />
+                        <span style={{ fontSize: 10 }}>ภาพที่ {i + 1}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          style={{ display: "none" }}
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            const msg = validateMediaFile(file, MAX_IMAGE_MB);
+                            if (msg) {
+                              setSlideErrors((prev) => { const a = [...(prev || [])]; a[i] = msg; return a; });
+                              e.target.value = "";
+                              return;
+                            }
+                            setSlideErrors((prev) => { const a = [...(prev || [])]; a[i] = ""; return a; });
+                            try {
+                              const url = await uploadMedia(file, { maxBytes: MAX_IMAGE_BYTES, skipSupabase: backend !== "supabase" });
+                              const next = [...(form.heroSlideshowImages || [])];
+                              next[i] = url;
+                              setForm({ ...form, heroSlideshowImages: next });
+                            } catch (err) {
+                              setSlideErrors((prev) => { const a = [...(prev || [])]; a[i] = err.message || "อัปโหลดไฟล์ไม่สำเร็จ"; return a; });
+                            }
+                          }}
+                        />
+                      </label>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            {slideErrors.filter(Boolean).length > 0 && (
+              <div style={{ fontSize: 12, color: "var(--danger)", marginBottom: 6 }}>
+                {slideErrors.filter(Boolean).join(" · ")}
               </div>
             )}
+            <div style={{ fontSize: 11, color: "var(--ink-soft)", marginBottom: 8 }}>รองรับรูปภาพขนาดไม่เกิน {MAX_IMAGE_MB} MB ต่อภาพ</div>
+            <label style={{ fontSize: 12, color: "var(--ink-soft)", display: "block", marginBottom: 4 }}>
+              ความเร็วในการเปลี่ยนภาพ: ทุก {form.heroSlideInterval || 5} วินาที
+            </label>
             <input
-              type="file"
-              accept="video/mp4,video/webm,image/gif"
-              className="sfg-input"
-              style={{ padding: 6, fontSize: 12 }}
-              onChange={async (e) => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-                try {
-                  const b64 = await fileToBase64(file);
-                  setForm((prev) => ({ ...prev, heroMediaUrl: b64 }));
-                } catch (err) { /* ignore */ }
-              }}
+              type="range" min="3" max="15"
+              value={form.heroSlideInterval || 5}
+              onChange={(e) => setForm({ ...form, heroSlideInterval: Number(e.target.value) })}
+              style={{ width: "100%" }}
             />
           </div>
-          <input
-            className="sfg-input"
-            placeholder="หรือวางลิงก์ไฟล์ .mp4 / .webm / .gif โดยตรง"
-            value={form.heroMediaUrl && form.heroMediaUrl.startsWith("data:") ? "" : (form.heroMediaUrl || "")}
-            onChange={(e) => setForm({ ...form, heroMediaUrl: e.target.value })}
-          />
-          <div style={{ fontSize: 11, color: "var(--ink-soft)", marginTop: 4 }}>ไฟล์ขนาดใหญ่มากอาจทำให้บันทึกไม่สำเร็จ (พื้นที่จัดเก็บเบราว์เซอร์จำกัด) แนะนำไฟล์ไม่เกินไม่กี่ MB</div>
-        </div>
+        )}
 
-        <div style={{ marginBottom: 12 }}>
-          <label style={{ fontSize: 12, color: "var(--ink-soft)", display: "block", marginBottom: 4 }}>
-            ความทึบของ Overlay: {form.heroOverlayOpacity ?? 55}%
-          </label>
-          <input
-            type="range" min="0" max="90"
-            value={form.heroOverlayOpacity ?? 55}
-            onChange={(e) => setForm({ ...form, heroOverlayOpacity: Number(e.target.value) })}
-            style={{ width: "100%" }}
-          />
-        </div>
+        {form.heroBgMode !== "gradient" && (
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ fontSize: 12, color: "var(--ink-soft)", display: "block", marginBottom: 4 }}>
+              ความทึบของ Overlay: {form.heroOverlayOpacity ?? 55}%
+            </label>
+            <input
+              type="range" min="0" max="90"
+              value={form.heroOverlayOpacity ?? 55}
+              onChange={(e) => setForm({ ...form, heroOverlayOpacity: Number(e.target.value) })}
+              style={{ width: "100%" }}
+            />
+          </div>
+        )}
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 4 }}>
           <div>
@@ -2291,8 +2550,22 @@ export default function App() {
 
   const navOverlay = page.name === "home" && !scrolled;
 
+  useEffect(() => {
+    // Establish the very first history entry so the browser Back button has something to land on.
+    window.history.replaceState({ name: "home", id: null }, "");
+    const onPopState = (e) => {
+      const state = e.state || { name: "home", id: null };
+      setPage(state);
+      window.scrollTo({ top: 0, behavior: "instant" in window ? "instant" : "auto" });
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
   const goto = (name, id = null) => {
-    setPage({ name, id });
+    const next = { name, id };
+    setPage(next);
+    window.history.pushState(next, "");
     window.scrollTo({ top: 0, behavior: "instant" in window ? "instant" : "auto" });
   };
 

@@ -74,6 +74,8 @@ const ADMIN_PASS = "faculty2026";
 
 **ถ้าตั้งค่าแล้ว:** ข้อมูลทั้งหมด (อาจารย์ สาขา ห้องเรียน รูปภาพ ฯลฯ) จะเก็บถาวรบนเซิร์ฟเวอร์ ทุกคนที่เข้าเว็บจากที่ไหนก็เห็นข้อมูลเดียวกันแบบเรียลไทม์ ไม่มีวันหายแม้ล้างเบราว์เซอร์
 
+> **ถ้า Supabase ใช้ไม่ได้ชั่วคราว** (เช่น โปรเจกต์แผนฟรีถูกหยุดชั่วคราว/ออฟไลน์) เว็บจะสลับไปใช้ localStorage ในเครื่องให้ **อัตโนมัติ** ภายในไม่กี่วินาที — เว็บไม่ค้าง ไม่พัง และหน้า Admin จะแจ้งเตือนให้ทราบ
+
 ### ขั้นตอนตั้งค่า (ทำครั้งเดียว)
 
 1. **สมัครและสร้างโปรเจกต์**
@@ -84,21 +86,37 @@ const ADMIN_PASS = "faculty2026";
 
 3. **คัดลอก URL และ Key**
    เมนูซ้าย **Settings → API** → คัดลอก 2 ค่านี้:
-   - **Project URL**
+   - **Project URL** (เช่น `https://xxxx.supabase.co`)
    - **anon public** key (ห้ามใช้ `service_role` เด็ดขาด)
 
-4. **ใส่ค่าในโค้ด**
-   เปิดไฟล์ `src/supabaseClient.js` แก้ 2 บรรทัดนี้:
-   ```js
-   const SUPABASE_URL = "https://xxxxxxxxxxxx.supabase.co"; // Project URL ของคุณ
-   const SUPABASE_ANON_KEY = "eyJhbGciOi..."; // anon public key ของคุณ
+4. **ใส่ค่าลงไฟล์ `.env` (สำหรับรันในเครื่อง)**
+   คัดลอก `.env.example` แล้วเปลี่ยนชื่อเป็น `.env` จากนั้นเติม 2 ค่านี้:
+   ```ini
+   VITE_SUPABASE_URL=https://xxxx.supabase.co
+   VITE_SUPABASE_ANON_KEY=eyJhbGciOi...
    ```
+   ไฟล์ `.env` ถูกกันไม่ให้ commit ขึ้น GitHub ไว้แล้ว (ค่า key จะไม่หลุด)
 
-5. **Commit ขึ้น GitHub** — ระบบ Actions จะ build และ deploy ให้อัตโนมัติเหมือนเดิม
+5. **ตั้ง Secrets สำหรับ GitHub Pages (ต้องทำเพื่อให้เว็บออนไลน์ใช้ได้จริง)**
+   หน้า repo บน GitHub → **Settings → Secrets and variables → Actions → New repository secret** สร้าง 2 ตัว:
+   - `VITE_SUPABASE_URL` = Project URL ของคุณ
+   - `VITE_SUPABASE_ANON_KEY` = anon public key ของคุณ
 
-หลังตั้งค่าเสร็จ เข้า Admin → Dashboard จะเห็นแถบสีเขียว **"เชื่อมต่อฐานข้อมูล Supabase แล้ว"** ที่หน้า Dashboard ยืนยันว่าใช้งานได้จริงแล้ว
+   จากนั้น **Commit ขึ้น GitHub** — ระบบ Actions จะ build ด้วยค่านั้นแล้ว deploy ให้อัตโนมัติ
+
+6. **ลองเปิดใช้งาน**
+   เข้า Admin → Dashboard ถ้าเห็นแถบสีเขียว **"เชื่อมต่อฐานข้อมูล Supabase แล้ว"** = ใช้ได้จริงแล้ว ลองเพิ่ม/แก้ข้อมูล แล้วดูได้ใน Supabase → Table Editor → ตาราง `app_data`
 
 Supabase แผนฟรีให้พื้นที่ฐานข้อมูล 500MB ซึ่งเพียงพอสำหรับข้อมูล+รูปภาพของเว็บนี้หลายพันรายการ
+
+## ขนาดไฟล์อัปโหลดสูงสุด
+
+ระบบจำกัดขนาดไฟล์อัปโหลดในหน้า Admin และแสดงข้อความแจ้งเตือนใต้ช่องอัปโหลดไว้ให้แล้ว:
+
+- **รูปภาพ** (โลโก้, รูปอาจารย์/สาขา/ห้อง/อาคาร/สถานที่, แกลเลอรี, สไลด์โชว์): **ไม่เกิน 2 MB**
+- **วิดีโอ / GIF พื้นหลังหน้าแรก** (MP4 / WebM / GIF): **ไม่เกิน 10 MB**
+
+แนะนำใช้ไฟล์ไม่เกินขนาดนี้โดยเฉพาะเมื่อยังใช้ localStorage (พื้นที่จำกัด ~5MB ต่อเบราว์เซอร์) เพื่อให้บันทึกข้อมูลได้สำเร็จ
 
 ## โครงสร้างไฟล์
 
@@ -106,6 +124,7 @@ Supabase แผนฟรีให้พื้นที่ฐานข้อม�
 smart-faculty-guide/
 ├── .github/workflows/deploy.yml   # ตั้งค่า deploy อัตโนมัติขึ้น GitHub Pages
 ├── supabase_schema.sql            # SQL สร้างตารางฐานข้อมูล (รันครั้งเดียวใน Supabase)
+├── .env.example                   # ตัวอย่างค่าที่ต้องกรอกใน .env (URL + anon key)
 ├── index.html
 ├── package.json
 ├── vite.config.js
