@@ -257,6 +257,7 @@ function isVideoMedia(url) {
 /* Figures out which hero background mode to use, staying compatible with
    settings saved before the slideshow feature existed. */
 function resolveHeroBgMode(settings) {
+  settings = settings || {};
   if (settings.heroBgMode === "slideshow" && (settings.heroSlideshowImages || []).filter(Boolean).length > 0) {
     return "slideshow";
   }
@@ -444,18 +445,23 @@ function seedData() {
   };
 }
 
+/* Always returns a settings object with every known property present — never undefined. */
+function normalizeSettings(raw) {
+  const seed = seedData().settings;
+  const s = raw && typeof raw === "object" ? raw : {};
+  const merged = { ...seed, ...s };
+  if (!Array.isArray(merged.features) || merged.features.length === 0) {
+    merged.features = DEFAULT_FEATURES;
+  }
+  merged.heroSlideshowImages = Array.isArray(merged.heroSlideshowImages) ? merged.heroSlideshowImages : [];
+  return merged;
+}
+
 /* Merges any Supabase payload with a complete default structure so a missing,
    empty, or malformed payload can never crash the UI (white screen). */
 function normalizeData(payload) {
   const seed = seedData();
   const src = payload && typeof payload === "object" ? payload : {};
-
-  const srcSettings = src.settings && typeof src.settings === "object" ? src.settings : {};
-  const settings = { ...seed.settings, ...srcSettings };
-  if (!Array.isArray(settings.features) || settings.features.length === 0) {
-    settings.features = DEFAULT_FEATURES;
-  }
-  settings.heroSlideshowImages = Array.isArray(settings.heroSlideshowImages) ? settings.heroSlideshowImages : [];
 
   return {
     departments: Array.isArray(src.departments) ? src.departments : seed.departments,
@@ -465,7 +471,7 @@ function normalizeData(payload) {
     schedules: Array.isArray(src.schedules) ? src.schedules : seed.schedules,
     places: Array.isArray(src.places) ? src.places : seed.places,
     gallery: Array.isArray(src.gallery) ? src.gallery : seed.gallery,
-    settings,
+    settings: normalizeSettings(src.settings),
   };
 }
 
@@ -537,13 +543,14 @@ function useFacultyData() {
   }, []);
 
   const persist = async (nextData) => {
-    setData(nextData);
+    const normalized = normalizeData(nextData);
+    setData(normalized);
     setSaving(true);
     try {
       const { error } = await withTimeout(
         supabase
           .from("app_data")
-          .update({ payload: nextData, updated_at: new Date().toISOString() })
+          .update({ payload: normalized, updated_at: new Date().toISOString() })
           .eq("id", APP_DATA_ROW_ID),
         SUPABASE_TIMEOUT_MS
       );
@@ -733,16 +740,16 @@ function Navbar({ page, goto, isAdmin, onLogout, theme, toggleTheme, settings, q
     }}>
       <div style={{ maxWidth: 1180, width: "100%", margin: "0 auto", padding: "14px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
         <button onClick={() => goto("home")} style={{ display: "flex", alignItems: "center", gap: 12, background: "none", border: "none", flexShrink: 1, minWidth: 0, overflow: "hidden" }}>
-          {settings.logoImage ? (
+          {settings?.logoImage ? (
             <img src={settings.logoImage} alt="logo" className="sfg-navbar-logo" style={{ width: 52, height: 52, borderRadius: 14, objectFit: "cover", border: "1px solid " + (overlay ? "rgba(255,255,255,0.4)" : "var(--border)"), flexShrink: 0 }} />
           ) : (
             <div className="sfg-navbar-logo" style={{ width: 52, height: 52, borderRadius: 14, background: overlay ? "rgba(255,255,255,0.18)" : "linear-gradient(135deg, var(--primary-soft), var(--primary))", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Noto Serif Thai',serif", fontWeight: 700, fontSize: 13, flexShrink: 0 }}>
-              {settings.siteTitle}
+              {settings?.siteTitle || ""}
             </div>
           )}
           <div style={{ textAlign: "left", minWidth: 0, overflow: "hidden" }}>
-            <div style={{ fontFamily: "'Noto Serif Thai',serif", fontWeight: 700, fontSize: 20, color: titleColor, lineHeight: 1.15, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{settings.siteTitle}</div>
-            <div className="sfg-navbar-subtitle" style={{ fontSize: 12.5, color: subtitleColor, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{settings.siteSubtitle}</div>
+            <div style={{ fontFamily: "'Noto Serif Thai',serif", fontWeight: 700, fontSize: 20, color: titleColor, lineHeight: 1.15, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{settings?.siteTitle || ""}</div>
+            <div className="sfg-navbar-subtitle" style={{ fontSize: 12.5, color: subtitleColor, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{settings?.siteSubtitle || ""}</div>
           </div>
         </button>
 
@@ -834,8 +841,9 @@ function Navbar({ page, goto, isAdmin, onLogout, theme, toggleTheme, settings, q
    HOME PAGE
    ========================================================================= */
 function HomePage({ data, goto, query, setQuery, onSearchSubmit, navOverlay }) {
+  const s = data?.settings || {};
   const FEATURE_COLORS = ["#B07A1E", "#2E6F6B", "#7D4FA6", "#3D6FB0", "#5C8A3A", "#B0492E"];
-  const featureSource = data.settings.features && data.settings.features.length ? data.settings.features : DEFAULT_FEATURES;
+  const featureSource = s.features && s.features.length ? s.features : DEFAULT_FEATURES;
   const features = featureSource.map((f, i) => ({
     icon: FEATURE_ICON_MAP[f.icon] || Info,
     title: f.title,
@@ -843,13 +851,13 @@ function HomePage({ data, goto, query, setQuery, onSearchSubmit, navOverlay }) {
     color: FEATURE_COLORS[i % FEATURE_COLORS.length],
   }));
 
-  const heroHasBg = resolveHeroBgMode(data.settings) !== "gradient";
+  const heroHasBg = resolveHeroBgMode(s) !== "gradient";
 
   return (
     <div>
       {/* HERO — Motion Cover */}
       <div style={{ position: "relative", overflow: "hidden", background: "linear-gradient(160deg, var(--primary) 0%, var(--primary-soft) 60%, var(--accent) 160%)", borderBottom: "1px solid var(--border)" }}>
-        <HeroBackground settings={data.settings} />
+        <HeroBackground settings={s} />
         {!heroHasBg && (
           <>
             <div className="sfg-dotted-bg" style={{ position: "absolute", inset: 0, opacity: 0.5 }} />
@@ -860,10 +868,10 @@ function HomePage({ data, goto, query, setQuery, onSearchSubmit, navOverlay }) {
 
         <div style={{ maxWidth: 1180, margin: "0 auto", padding: navOverlay ? "144px 20px 52px" : "60px 20px 52px", textAlign: "center", position: "relative", transition: "padding .2s ease" }}>
           <div style={{ display: "inline-flex", alignItems: "center", gap: 6, marginBottom: 18, background: "rgba(255,255,255,0.15)", color: "#fff", padding: "5px 14px", borderRadius: 999, fontSize: 12.5, fontWeight: 600 }}>
-            <GraduationCap size={13} /> {data.settings.siteTitle} · {data.settings.siteSubtitle}
+            <GraduationCap size={13} /> {s.siteTitle || ""} · {s.siteSubtitle || ""}
           </div>
-          <h1 style={{ fontSize: "clamp(28px, 5vw, 46px)", maxWidth: 720, margin: "0 auto 16px", color: "#fff" }}>{data.settings.heroHeadline}</h1>
-          <p style={{ color: "rgba(255,255,255,0.88)", maxWidth: 560, margin: "0 auto 32px", fontSize: 15.5 }}>{data.settings.heroSubtext}</p>
+          <h1 style={{ fontSize: "clamp(28px, 5vw, 46px)", maxWidth: 720, margin: "0 auto 16px", color: "#fff" }}>{s.heroHeadline || ""}</h1>
+          <p style={{ color: "rgba(255,255,255,0.88)", maxWidth: 560, margin: "0 auto 32px", fontSize: 15.5 }}>{s.heroSubtext || ""}</p>
 
           <form onSubmit={(e) => { e.preventDefault(); onSearchSubmit(); }} style={{ maxWidth: 580, margin: "0 auto", position: "relative" }}>
             <Search size={18} style={{ position: "absolute", left: 18, top: 17, color: "var(--ink-soft)" }} />
@@ -877,13 +885,13 @@ function HomePage({ data, goto, query, setQuery, onSearchSubmit, navOverlay }) {
             <button type="submit" className="sfg-btn sfg-btn-accent" style={{ position: "absolute", right: 6, top: 6, padding: "10px 18px" }}>ค้นหา</button>
           </form>
 
-          {data.settings.heroCtaText && (
+          {s.heroCtaText && (
             <button
-              onClick={() => goto(data.settings.heroCtaTarget || "departments")}
+              onClick={() => goto(s.heroCtaTarget || "departments")}
               className="sfg-btn"
               style={{ marginTop: 22, background: "#fff", color: "var(--primary)", fontWeight: 700, padding: "12px 26px", borderRadius: 999 }}
             >
-              {data.settings.heroCtaText} <ChevronRight size={15} />
+              {s.heroCtaText} <ChevronRight size={15} />
             </button>
           )}
         </div>
@@ -1611,13 +1619,14 @@ function SearchPage({ data, query, goto }) {
    CONTACT PAGE
    ========================================================================= */
 function ContactPage({ data }) {
+  const s = data?.settings || {};
   return (
     <PageShell title="ติดต่อคณะ" subtitle="ช่องทางการติดต่อสำนักงานคณะ" icon={Phone} accent="#B07A1E">
       <div className="sfg-card" style={{ padding: 26, maxWidth: 480 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 16, fontSize: 14 }}>
-          <div style={{ display: "flex", gap: 10 }}><Mail size={17} style={{ color: "var(--accent)" }} /> {data.settings.contactEmail}</div>
-          <div style={{ display: "flex", gap: 10 }}><Phone size={17} style={{ color: "var(--accent)" }} /> {data.settings.contactPhone}</div>
-          <div style={{ display: "flex", gap: 10 }}><MapPin size={17} style={{ color: "var(--accent)" }} /> {data.settings.contactAddress}</div>
+          <div style={{ display: "flex", gap: 10 }}><Mail size={17} style={{ color: "var(--accent)" }} /> {s.contactEmail || ""}</div>
+          <div style={{ display: "flex", gap: 10 }}><Phone size={17} style={{ color: "var(--accent)" }} /> {s.contactPhone || ""}</div>
+          <div style={{ display: "flex", gap: 10 }}><MapPin size={17} style={{ color: "var(--accent)" }} /> {s.contactAddress || ""}</div>
         </div>
       </div>
     </PageShell>
@@ -2194,7 +2203,7 @@ function AdminDashboard({ data, persist, saveError, onLogout, goto }) {
         )}
 
         {tab === "settings" && (
-          <SettingsForm settings={data.settings} onSave={(s) => persist({ ...data, settings: s })} />
+          <SettingsForm settings={data?.settings || {}} onSave={(s) => persist({ ...data, settings: s })} />
         )}
       </div>
     </div>
@@ -2203,11 +2212,11 @@ function AdminDashboard({ data, persist, saveError, onLogout, goto }) {
 }
 
 function SettingsForm({ settings, onSave }) {
-  const [form, setForm] = useState(settings);
+  const [form, setForm] = useState(settings || {});
   const [logoError, setLogoError] = useState("");
   const [heroError, setHeroError] = useState("");
   const [slideErrors, setSlideErrors] = useState([]);
-  useEffect(() => setForm(settings), [settings]);
+  useEffect(() => setForm(settings || {}), [settings]);
   const save = (e) => { e.preventDefault(); onSave(form); };
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
   return (
@@ -2632,7 +2641,7 @@ export default function App() {
         onLogout={() => setIsAdmin(false)}
         theme={theme}
         toggleTheme={() => setTheme((t) => (t === "light" ? "dark" : "light"))}
-        settings={data.settings}
+settings={data?.settings || {}}
         query={query}
         setQuery={setQuery}
         onSearchSubmit={onSearchSubmit}
@@ -2661,15 +2670,15 @@ export default function App() {
         <div className="sfg-footer-grid" style={{ maxWidth: 1180, margin: "0 auto", padding: "44px 20px 28px" }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-              {data.settings.logoImage ? (
+              {data?.settings?.logoImage ? (
                 <img src={data.settings.logoImage} alt="logo" style={{ width: 36, height: 36, borderRadius: 9, objectFit: "cover" }} />
               ) : (
-                <div style={{ width: 36, height: 36, borderRadius: 9, background: "linear-gradient(135deg, var(--accent), var(--primary-soft))", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700 }}>{data.settings.siteTitle}</div>
+                <div style={{ width: 36, height: 36, borderRadius: 9, background: "linear-gradient(135deg, var(--accent), var(--primary-soft))", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700 }}>{data?.settings?.siteTitle || ""}</div>
               )}
-              <div style={{ fontFamily: "'Noto Serif Thai',serif", fontWeight: 700, color: "#fff", fontSize: 16 }}>{data.settings.siteTitle}</div>
+              <div style={{ fontFamily: "'Noto Serif Thai',serif", fontWeight: 700, color: "#fff", fontSize: 16 }}>{data?.settings?.siteTitle || ""}</div>
             </div>
             <p style={{ color: "#9497A8", fontSize: 12.5, lineHeight: 1.7, maxWidth: 260, marginBottom: 16 }}>
-              {data.settings.siteSubtitle} — โปรเจกต์สาธิตสำหรับส่งอาจารย์ ข้อมูลทั้งหมดในระบบเป็นข้อมูลสมมติ
+              {data?.settings?.siteSubtitle || ""} — โปรเจกต์สาธิตสำหรับส่งอาจารย์ ข้อมูลทั้งหมดในระบบเป็นข้อมูลสมมติ
             </p>
             <div style={{ display: "flex", gap: 8 }}>
               {[Info, Mail, Phone, MapPin].map((Icon, i) => (
@@ -2698,15 +2707,15 @@ export default function App() {
           <div>
             <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 12, color: "#fff" }}>ติดต่อ</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 10, fontSize: 12.5, color: "#9497A8" }}>
-              <span style={{ display: "flex", alignItems: "center", gap: 6 }}><Mail size={13} /> {data.settings.contactEmail}</span>
-              <span style={{ display: "flex", alignItems: "center", gap: 6 }}><Phone size={13} /> {data.settings.contactPhone}</span>
-              <span style={{ display: "flex", alignItems: "flex-start", gap: 6 }}><MapPin size={13} style={{ marginTop: 2, flexShrink: 0 }} /> {data.settings.contactAddress}</span>
+              <span style={{ display: "flex", alignItems: "center", gap: 6 }}><Mail size={13} /> {data?.settings?.contactEmail || ""}</span>
+              <span style={{ display: "flex", alignItems: "center", gap: 6 }}><Phone size={13} /> {data?.settings?.contactPhone || ""}</span>
+              <span style={{ display: "flex", alignItems: "flex-start", gap: 6 }}><MapPin size={13} style={{ marginTop: 2, flexShrink: 0 }} /> {data?.settings?.contactAddress || ""}</span>
             </div>
           </div>
         </div>
         <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, maxWidth: 1180, margin: "0 auto" }}>
           <div style={{ fontSize: 11.5, color: "#7B7E90" }}>
-            © {new Date().getFullYear()} {data.settings.siteTitle} · {data.settings.siteSubtitle}
+            © {new Date().getFullYear()} {data?.settings?.siteTitle || ""} · {data?.settings?.siteSubtitle || ""}
             {saving && <span style={{ marginLeft: 8 }}>· กำลังบันทึก...</span>}
           </div>
           <div style={{ display: "flex", gap: 16, fontSize: 11.5, color: "#7B7E90" }}>
