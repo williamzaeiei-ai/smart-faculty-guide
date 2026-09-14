@@ -6,7 +6,7 @@ import {
   Clock, Mail, Phone, Video as VideoIcon, Image as ImageIcon, Send,
   ArrowLeft, Check, AlertCircle, Sun, Moon, LogOut, Users, Home as HomeIcon,
   Navigation, GraduationCap, UtensilsCrossed, BookOpen, ParkingCircle,
-  Stethoscope, Landmark, Info, ArrowRight
+  Stethoscope, Landmark, Info
 } from "lucide-react";
 
 /* =========================================================================
@@ -167,27 +167,22 @@ const GlobalStyle = () => (
     @media (max-width: 900px) { .sfg-card-grid { grid-template-columns: repeat(2, 1fr); } }
     @media (max-width: 567px) { .sfg-card-grid { grid-template-columns: 1fr; } }
 
-    /* ===== News & Articles magazine grid (2 cols, alternating thumb, staggered) ===== */
+    /* ===== News & Articles magazine grid (2 cols, image-only cards, staggered) ===== */
     .sfg-news-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
     @media (max-width: 640px) { .sfg-news-grid { grid-template-columns: 1fr; } }
     .sfg-news-card {
-      background: #0B0F19; border: 1px solid rgba(255,255,255,0.08); border-radius: 14px;
-      overflow: hidden; color: #EDEAE0; display: flex; flex-direction: column; height: 100%;
-      box-shadow: 0 6px 20px -10px rgba(0,0,0,0.45);
+      position: relative; display: block;
+      border-radius: 12px; overflow: hidden;
+      aspect-ratio: 16/9;
+      background: #0B0F19;
     }
-    .sfg-news-inner { display: flex; flex: 1; min-height: 0; flex-direction: var(--news-dir, row); }
-    .sfg-news-media { position: relative; overflow: hidden; min-width: 44%; background: linear-gradient(135deg, #1A2130, #121722); }
-    .sfg-news-media img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .45s ease; }
-    .sfg-news-card:hover .sfg-news-media img { transform: scale(1.03); }
-    .sfg-news-arrow { display: inline-flex; align-items: center; gap: 4px; font-weight: 700; transition: transform .2s ease; }
-    .sfg-news-card:hover .sfg-news-arrow { transform: translateX(4px); }
-    .sfg-news-link { display: block; height: 100%; color: inherit; text-decoration: none; }
-    .sfg-line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-    .sfg-line-clamp-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-    @media (max-width: 640px) {
-      .sfg-news-inner { flex-direction: column; }
-      .sfg-news-media { width: 100%; min-width: 0; aspect-ratio: 16/9; }
+    .sfg-news-card img {
+      width: 100%; height: 100%;
+      object-fit: cover; display: block;
+      transition: transform .3s ease;
     }
+    .sfg-news-card:hover img { transform: scale(1.03); }
+    .sfg-news-link { display: block; color: inherit; text-decoration: none; }
   `}</style>
 );
 
@@ -922,52 +917,28 @@ function Navbar({ page, goto, isAdmin, onLogout, theme, toggleTheme, settings, q
 /* =========================================================================
    HOME PAGE
    ========================================================================= */
-function NewsCard({ item, index = 0 }) {
-  const title = item?.title || "";
-  const desc = item?.description || "";
+function NewsCard({ item }) {
   const mediaType = item?.mediaType === "video" ? "video" : "image";
   const mediaUrl = item?.mediaUrl || "";
-  const dateStr = formatDate(item?.date || item?.created_at);
   const linkUrl = item?.linkUrl || "";
 
-  let media;
-  if (mediaUrl && mediaType === "video") {
-    media = <video src={mediaUrl} autoPlay loop muted playsInline style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />;
-  } else if (mediaUrl) {
-    media = <img src={mediaUrl} alt={title} loading="lazy" onError={(e) => { e.currentTarget.style.display = "none"; }} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />;
-  } else {
-    media = (
-      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(255,255,255,0.25)" }}>
-        {mediaType === "video" ? <VideoIcon size={28} strokeWidth={1.3} /> : <ImageIcon size={28} strokeWidth={1.3} />}
-      </div>
-    );
-  }
-
-  const inner = (
+  const content = (
     <div className="sfg-news-card">
-      <div className="sfg-news-inner" style={{ "--news-dir": index % 2 === 1 ? "row-reverse" : "row" }}>
-        <div className="sfg-news-media" style={{ position: "relative", background: "linear-gradient(135deg, #1A2130, #121722)" }}>
-          {media}
+      {mediaUrl && mediaType === "video" ? (
+        <video src={mediaUrl} autoPlay loop muted playsInline style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+      ) : mediaUrl ? (
+        <img src={mediaUrl} alt={item?.title || ""} loading="lazy" onError={(e) => { e.currentTarget.style.display = "none"; }} />
+      ) : (
+        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(255,255,255,0.25)" }}>
+          {mediaType === "video" ? <VideoIcon size={28} strokeWidth={1.3} /> : <ImageIcon size={28} strokeWidth={1.3} />}
         </div>
-        <div style={{ flex: 1, padding: 16, display: "flex", flexDirection: "column", gap: 6 }}>
-          {dateStr && (
-            <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "#E6C67E", fontWeight: 600 }}>
-              <Calendar size={12} /> {dateStr}
-            </span>
-          )}
-          <h3 className="sfg-line-clamp-2" style={{ fontSize: 17, margin: 0, color: "#EDEAE0", lineHeight: 1.4, fontWeight: 700 }}>{title}</h3>
-          <p className="sfg-line-clamp-3" style={{ fontSize: 13, color: "#9AA3B5", margin: 0, lineHeight: 1.7, flex: 1 }}>{desc}</p>
-          <span className="sfg-news-arrow" style={{ color: "#E6C67E", fontSize: 13, marginTop: 6, display: "inline-flex", alignItems: "center", gap: 4 }}>
-            อ่านต่อ <ArrowRight size={14} />
-          </span>
-        </div>
-      </div>
+      )}
     </div>
   );
 
   return linkUrl ? (
-    <a href={linkUrl} target="_blank" rel="noopener noreferrer" className="sfg-news-link">{inner}</a>
-  ) : inner;
+    <a href={linkUrl} target="_blank" rel="noopener noreferrer" className="sfg-news-link">{content}</a>
+  ) : content;
 }
 
 function HomePage({ data, goto, query, setQuery, onSearchSubmit, navOverlay }) {
@@ -1052,7 +1023,7 @@ function HomePage({ data, goto, query, setQuery, onSearchSubmit, navOverlay }) {
           <div className="sfg-news-grid" style={{ marginBottom: 56 }}>
             {newsItems.map((n, i) => (
               <div key={n.id || i} style={i % 2 === 1 ? { marginTop: 30 } : undefined}>
-                <NewsCard item={n} index={i} />
+                <NewsCard item={n} />
               </div>
             ))}
           </div>
