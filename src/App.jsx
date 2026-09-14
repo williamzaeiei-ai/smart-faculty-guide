@@ -6,7 +6,7 @@ import {
   Clock, Mail, Phone, Video as VideoIcon, Image as ImageIcon, Send,
   ArrowLeft, Check, AlertCircle, Sun, Moon, LogOut, Users, Home as HomeIcon,
   Navigation, GraduationCap, UtensilsCrossed, BookOpen, ParkingCircle,
-  Stethoscope, Landmark, Info
+  Stethoscope, Landmark, Info, ArrowRight
 } from "lucide-react";
 
 /* =========================================================================
@@ -163,15 +163,31 @@ const GlobalStyle = () => (
     }
 
     /* ===== 4-column card grids (Desktop 4 / Tablet 2 / Mobile 1) ===== */
-    .sfg-card-grid, .sfg-promo-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
-    @media (max-width: 900px) { .sfg-card-grid, .sfg-promo-grid { grid-template-columns: repeat(2, 1fr); } }
-    @media (max-width: 567px) { .sfg-card-grid, .sfg-promo-grid { grid-template-columns: 1fr; } }
+    .sfg-card-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+    @media (max-width: 900px) { .sfg-card-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 567px) { .sfg-card-grid { grid-template-columns: 1fr; } }
 
-    /* ===== Promo banners ===== */
-    .sfg-promo-media { position: relative; overflow: hidden; background: linear-gradient(135deg, var(--primary-soft), var(--primary)); }
-    .sfg-promo-media img { transition: transform .45s ease; }
-    .sfg-promo-media:hover img { transform: scale(1.08); }
-    .sfg-promo-card-link { display: block; height: 100%; color: inherit; text-decoration: none; }
+    /* ===== News & Articles magazine grid (2 cols, alternating thumb, staggered) ===== */
+    .sfg-news-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+    @media (max-width: 640px) { .sfg-news-grid { grid-template-columns: 1fr; } }
+    .sfg-news-card {
+      background: #0B0F19; border: 1px solid rgba(255,255,255,0.08); border-radius: 14px;
+      overflow: hidden; color: #EDEAE0; display: flex; flex-direction: column; height: 100%;
+      box-shadow: 0 6px 20px -10px rgba(0,0,0,0.45);
+    }
+    .sfg-news-inner { display: flex; flex: 1; min-height: 0; flex-direction: var(--news-dir, row); }
+    .sfg-news-media { position: relative; overflow: hidden; min-width: 44%; background: linear-gradient(135deg, #1A2130, #121722); }
+    .sfg-news-media img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .45s ease; }
+    .sfg-news-card:hover .sfg-news-media img { transform: scale(1.03); }
+    .sfg-news-arrow { display: inline-flex; align-items: center; gap: 4px; font-weight: 700; transition: transform .2s ease; }
+    .sfg-news-card:hover .sfg-news-arrow { transform: translateX(4px); }
+    .sfg-news-link { display: block; height: 100%; color: inherit; text-decoration: none; }
+    .sfg-line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .sfg-line-clamp-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+    @media (max-width: 640px) {
+      .sfg-news-inner { flex-direction: column; }
+      .sfg-news-media { width: 100%; min-width: 0; aspect-ratio: 16/9; }
+    }
   `}</style>
 );
 
@@ -269,11 +285,33 @@ const DEFAULT_SECTION_TITLES = {
 
 /* Default promo banners shown on the home page until the admin customizes them */
 const DEFAULT_PROMO_BANNERS = [
-  { id: "pb1", title: "เปิดรับสมัครนักศึกษาใหม่", description: "สมัครเรียนคณะวิศวกรรม รับรอบโควตาและรอบรับตรงตลอดปี", mediaType: "image", mediaUrl: "", linkUrl: "" },
-  { id: "pb2", title: "คลินิกให้คำปรึกษา AI", description: "มาลองใช้ Faculty AI Assistant ถามทุกเรื่องภายในคณะได้ทันที", mediaType: "image", mediaUrl: "", linkUrl: "" },
-  { id: "pb3", title: "อบรมระบบสารสนเทศ", description: "เรียนรู้วิธีอัปเดตข้อมูลผ่านหน้า Admin Dashboard ของคณะ", mediaType: "image", mediaUrl: "", linkUrl: "" },
-  { id: "pb4", title: "กิจกรรมนักศึกษา", description: "ร่วมกิจกรรมพัฒนาทักษะซอฟต์แวร์และนวัตกรรมประจำภาคเรียน", mediaType: "image", mediaUrl: "", linkUrl: "" },
+  { id: "pb1", title: "เปิดรับสมัครนักศึกษาใหม่", description: "สมัครเรียนคณะวิศวกรรม รับรอบโควตาและรอบรับตรงตลอดปี", mediaType: "image", mediaUrl: "", linkUrl: "", date: "05/07/2026" },
+  { id: "pb2", title: "คลินิกให้คำปรึกษา AI", description: "มาลองใช้ Faculty AI Assistant ถามทุกเรื่องภายในคณะได้ทันที", mediaType: "image", mediaUrl: "", linkUrl: "", date: "28/06/2026" },
+  { id: "pb3", title: "อบรมระบบสารสนเทศ", description: "เรียนรู้วิธีอัปเดตข้อมูลผ่านหน้า Admin Dashboard ของคณะ", mediaType: "image", mediaUrl: "", linkUrl: "", date: "16/06/2026" },
+  { id: "pb4", title: "กิจกรรมนักศึกษา", description: "ร่วมกิจกรรมพัฒนาทักษะซอฟต์แวร์และนวัตกรรมประจำภาคเรียน", mediaType: "image", mediaUrl: "", linkUrl: "", date: "02/06/2026" },
 ];
+
+/* Mock news & articles used as an automatic fallback on the home page
+   when the database has no promoBanners / news yet. */
+const DEFAULT_NEWS = [
+  { id: "n1", title: "คณะเปิดรับนักศึกษาใหม่ รอบรับตรง ปีการศึกษา 2569", description: "เปิดรับสมัครพร้อมทุนการศึกษาและสหกิจศึกษา สำหรับน้องใหม่ที่สนใจเข้าศึกษาต่อในทุกสาขาของคณะ", date: "08/07/2026", mediaUrl: "https://picsum.photos/seed/sfg-news-1/800/450", linkUrl: "" },
+  { id: "n2", title: "เปิดตัว Faculty AI Assistant เวอร์ชันใหม่", description: "ผู้ช่วยอัจฉริยะอัปเกรดฐานความรู้ให้ครอบคลุมทุกสาขา ตอบคำถามเรื่องอาจารย์ ห้องเรียน และตารางสอนได้แม่นยำยิ่งขึ้น", date: "01/07/2026", mediaUrl: "https://picsum.photos/seed/sfg-news-2/800/450", linkUrl: "" },
+  { id: "n3", title: "เวิร์กชอปพัฒนาแอปพลิเคชันโดยศิษย์เก่า", description: "เรียนรู้เส้นทางการเป็นนักพัฒนาซอฟต์แวร์จริงจากรุ่นพี่ผู้มีประสบการณ์ พร้อมเปิดรับสมัครทีมไปแข่ง Hackathon", date: "24/06/2026", mediaUrl: "https://picsum.photos/seed/sfg-news-3/800/450", linkUrl: "" },
+  { id: "n4", title: "ประกาศผลสอบปลายภาค ภาคเรียนที่ 2", description: "นักศึกษาสามารถตรวจสอบผลการเรียน พร้อมยื่นคำร้องขอดูคะแนนได้ภายใน 7 วันทำการหลังประกาศ", date: "18/06/2026", mediaUrl: "https://picsum.photos/seed/sfg-news-4/800/450", linkUrl: "" },
+  { id: "n5", title: "ห้องปฏิบัติการเครือข่ายอัปเกรดอุปกรณ์ใหม่", description: "ติดตั้งอุปกรณ์เครือข่ายรุ่นใหม่รองรับหลักสูตรด้านความมั่นคงปลอดภัยไซเบอร์และ IoT เริ่มใช้งานได้ภาคเรียนหน้า", date: "09/06/2026", mediaUrl: "https://picsum.photos/seed/sfg-news-5/800/450", linkUrl: "" },
+  { id: "n6", title: "สัมมนาเตรียมความพร้อมสหกิจศึกษา", description: "ปฐมนิเทศนักศึกษาชั้นปี 3 ที่มีแผนฝึกงานในภาคการศึกษา 1/2569 พร้อมเทคนิคการเขียนเรซูเม่แบบมืออาชีพ", date: "30/05/2026", mediaUrl: "https://picsum.photos/seed/sfg-news-6/800/450", linkUrl: "" },
+];
+
+/* Formats a date for the news cards: keeps "DD/MM/YYYY", converts ISO
+   "YYYY-MM-DD" to "DD/MM/YYYY", otherwise returns "". */
+function formatDate(value) {
+  if (!value) return "";
+  const raw = String(value);
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(raw)) return raw;
+  const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${iso[3]}/${iso[2]}/${iso[1]}`;
+  return "";
+}
 
 function isVideoMedia(url) {
   if (!url) return false;
@@ -884,49 +922,52 @@ function Navbar({ page, goto, isAdmin, onLogout, theme, toggleTheme, settings, q
 /* =========================================================================
    HOME PAGE
    ========================================================================= */
-function PromoBannerCard({ banner, index = 0 }) {
-  const title = banner?.title || "";
-  const desc = banner?.description || "";
-  const mediaType = banner?.mediaType === "video" ? "video" : "image";
-  const mediaUrl = banner?.mediaUrl || "";
-  const accent = DEPT_PALETTE[index % DEPT_PALETTE.length];
+function NewsCard({ item, index = 0 }) {
+  const title = item?.title || "";
+  const desc = item?.description || "";
+  const mediaType = item?.mediaType === "video" ? "video" : "image";
+  const mediaUrl = item?.mediaUrl || "";
+  const dateStr = formatDate(item?.date || item?.created_at);
+  const linkUrl = item?.linkUrl || "";
 
   let media;
   if (mediaUrl && mediaType === "video") {
     media = <video src={mediaUrl} autoPlay loop muted playsInline style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />;
   } else if (mediaUrl) {
-    media = <img src={mediaUrl} alt={title} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />;
+    media = <img src={mediaUrl} alt={title} loading="lazy" onError={(e) => { e.currentTarget.style.display = "none"; }} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />;
   } else {
     media = (
-      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(255,255,255,0.9)" }}>
-        {mediaType === "video" ? <VideoIcon size={26} strokeWidth={1.5} /> : <ImageIcon size={26} strokeWidth={1.5} />}
+      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(255,255,255,0.25)" }}>
+        {mediaType === "video" ? <VideoIcon size={28} strokeWidth={1.3} /> : <ImageIcon size={28} strokeWidth={1.3} />}
       </div>
     );
   }
 
-  const card = (
-    <div className="sfg-card sfg-card-hover" style={{ height: "100%", display: "flex", flexDirection: "column", border: "none" }}>
-      <div className="sfg-promo-media" style={{ aspectRatio: "16/9", flexShrink: 0 }}>
-        {media}
-        <span style={{ position: "absolute", top: 10, left: 10, fontSize: 10.5, fontWeight: 700, padding: "3px 9px", borderRadius: 999, background: accent, color: "#fff", display: "flex", alignItems: "center", gap: 4 }}>
-          {mediaType === "video" ? <VideoIcon size={11} /> : <ImageIcon size={11} />} {mediaType === "video" ? "วิดีโอ" : "ภาพ"}
-        </span>
-      </div>
-      <div style={{ padding: 14, flex: 1, display: "flex", flexDirection: "column" }}>
-        <h3 style={{ fontSize: 15, marginBottom: 6 }}>{title}</h3>
-        <p style={{ color: "var(--ink-soft)", fontSize: 12.5, lineHeight: 1.65, margin: 0, flex: 1 }}>{desc}</p>
-        {banner.linkUrl && (
-          <span style={{ marginTop: 10, color: "var(--primary)", fontSize: 13, fontWeight: 700, display: "flex", alignItems: "center", gap: 2 }}>
-            ดูรายละเอียด <ChevronRight size={14} />
+  const inner = (
+    <div className="sfg-news-card">
+      <div className="sfg-news-inner" style={{ "--news-dir": index % 2 === 1 ? "row-reverse" : "row" }}>
+        <div className="sfg-news-media" style={{ position: "relative", background: "linear-gradient(135deg, #1A2130, #121722)" }}>
+          {media}
+        </div>
+        <div style={{ flex: 1, padding: 16, display: "flex", flexDirection: "column", gap: 6 }}>
+          {dateStr && (
+            <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "#E6C67E", fontWeight: 600 }}>
+              <Calendar size={12} /> {dateStr}
+            </span>
+          )}
+          <h3 className="sfg-line-clamp-2" style={{ fontSize: 17, margin: 0, color: "#EDEAE0", lineHeight: 1.4, fontWeight: 700 }}>{title}</h3>
+          <p className="sfg-line-clamp-3" style={{ fontSize: 13, color: "#9AA3B5", margin: 0, lineHeight: 1.7, flex: 1 }}>{desc}</p>
+          <span className="sfg-news-arrow" style={{ color: "#E6C67E", fontSize: 13, marginTop: 6, display: "inline-flex", alignItems: "center", gap: 4 }}>
+            อ่านต่อ <ArrowRight size={14} />
           </span>
-        )}
+        </div>
       </div>
     </div>
   );
 
-  return banner.linkUrl ? (
-    <a href={banner.linkUrl} target="_blank" rel="noopener noreferrer" className="sfg-promo-card-link">{card}</a>
-  ) : card;
+  return linkUrl ? (
+    <a href={linkUrl} target="_blank" rel="noopener noreferrer" className="sfg-news-link">{inner}</a>
+  ) : inner;
 }
 
 function HomePage({ data, goto, query, setQuery, onSearchSubmit, navOverlay }) {
@@ -943,9 +984,12 @@ function HomePage({ data, goto, query, setQuery, onSearchSubmit, navOverlay }) {
   const heroHasBg = resolveHeroBgMode(s) !== "gradient";
   const bgImage = s.bgImageUrl || "";
   const bgOverlay = Number.isFinite(Number(s.bgOverlayOpacity)) ? Math.min(Math.max(Number(s.bgOverlayOpacity), 0), 1) : 0.55;
-  const banners = Array.isArray(s.promoBanners)
-    ? s.promoBanners.filter((b) => b && (b.title || b.mediaUrl || b.description)).slice(0, 4)
-    : [];
+  const newsSource = Array.isArray(s.promoBanners) && s.promoBanners.length
+    ? s.promoBanners
+    : (Array.isArray(data?.news) && data.news.length ? data.news : DEFAULT_NEWS);
+  const newsItems = newsSource
+    .filter((n) => n && (n.title || n.mediaUrl || n.description))
+    .slice(0, 6);
   const places = data?.places || [];
   const teachers = data?.teachers || [];
   const departments = data?.departments || [];
@@ -1000,30 +1044,18 @@ function HomePage({ data, goto, query, setQuery, onSearchSubmit, navOverlay }) {
         {bgImage && <div style={{ position: "absolute", inset: 0, background: `rgba(11,15,25,${bgOverlay})`, zIndex: 0 }} />}
         <div style={{ position: "relative", maxWidth: 1180, margin: "0 auto", padding: "40px 20px", zIndex: 1 }}>
 
-          {/* Promo Banners (if any) — otherwise show legacy Feature Cards */}
-          {banners.length > 0 ? (
-            <>
-              <SectionTitle eyebrow="ประชาสัมพันธ์" title="ข่าวประชาสัมพันธ์และโปรโมชัน" />
-              <div className="sfg-promo-grid" style={{ marginBottom: 52 }}>
-                {banners.map((b, i) => <PromoBannerCard key={b.id || i} banner={b} index={i} />)}
+          {/* News & Articles — magazine grid (2 cols, alternating thumb/staggered) */}
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--ink-soft)", opacity: 0.75, marginBottom: 4 }}>ข่าวสารมหาวิทยาลัย</div>
+            <h2 style={{ fontSize: 26, margin: 0 }}>ข่าวสารและบทความ</h2>
+          </div>
+          <div className="sfg-news-grid" style={{ marginBottom: 56 }}>
+            {newsItems.map((n, i) => (
+              <div key={n.id || i} style={i % 2 === 1 ? { marginTop: 30 } : undefined}>
+                <NewsCard item={n} index={i} />
               </div>
-            </>
-          ) : (
-            <>
-              <SectionTitle eyebrow="ทำไมต้องใช้ระบบนี้" title="ครบทุกข้อมูลของคณะ ในเว็บเดียว" />
-              <div className="sfg-card-grid" style={{ marginBottom: 52 }}>
-                {features.map((f) => (
-                  <div key={f.title} className="sfg-card" style={{ padding: 20 }}>
-                    <div className="sfg-feature-icon" style={{ background: f.color + "1A", color: f.color, marginBottom: 14 }}>
-                      <f.icon size={22} strokeWidth={1.8} />
-                    </div>
-                    <h3 style={{ fontSize: 15.5, marginBottom: 6 }}>{f.title}</h3>
-                    <p style={{ color: "var(--ink-soft)", fontSize: 13, lineHeight: 1.7, margin: 0 }}>{f.desc}</p>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
+            ))}
+          </div>
 
           <SectionTitle eyebrow="แนะนำ" title={s.titlePlaces || DEFAULT_SECTION_TITLES.titlePlaces} action={<button onClick={() => goto("places")} className="sfg-btn sfg-btn-ghost">ดูทั้งหมด <ChevronRight size={15} /></button>} />
           <div className="sfg-card-grid" style={{ marginBottom: 52 }}>
@@ -2153,13 +2185,13 @@ function PromoBannersManager({ banners, onSave }) {
   useEffect(() => { setList(banners || []); }, [banners]);
 
   const persistList = (next) => { setList(next); onSave(next.slice(0, 4)); };
-  const startAdd = () => setForm({ id: null, title: "", description: "", mediaType: "image", mediaUrl: "", linkUrl: "" });
+  const startAdd = () => setForm({ id: null, title: "", description: "", date: "", mediaType: "image", mediaUrl: "", linkUrl: "" });
   const startEdit = (item) => setForm({ ...item });
   const cancelEdit = () => { setForm(null); setMediaError(""); };
 
   const submit = (e) => {
     e.preventDefault();
-    const f = { ...form, title: (form.title || "").trim(), description: (form.description || "").trim(), linkUrl: (form.linkUrl || "").trim(), mediaUrl: (form.mediaUrl || "").trim(), mediaType: form.mediaType || "image" };
+    const f = { ...form, title: (form.title || "").trim(), description: (form.description || "").trim(), date: (form.date || "").trim(), linkUrl: (form.linkUrl || "").trim(), mediaUrl: (form.mediaUrl || "").trim(), mediaType: form.mediaType || "image" };
     if (!f.title && !f.mediaUrl) { setMediaError("กรุณาใส่หัวข้อ หรืออัปโหลดไฟล์สื่ออย่างน้อย 1 อย่าง"); return; }
     setMediaError("");
     const next = f.id ? list.map((b) => (b.id === f.id ? f : b)) : [...list, { ...f, id: f.id || uid("pb") }];
@@ -2177,7 +2209,7 @@ function PromoBannersManager({ banners, onSave }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <div>
           <h3 style={{ fontSize: 18 }}>Promo Banners <span style={{ color: "var(--ink-soft)", fontSize: 13, fontWeight: 400 }}>({list.length}/4)</span></h3>
-          <div style={{ fontSize: 12.5, color: "var(--ink-soft)" }}>แสดงผลสูงสุด 4 การ์ดต่อแถว บนหน้าแรก</div>
+          <div style={{ fontSize: 12.5, color: "var(--ink-soft)" }}>แสดงเป็น Magazine Grid 2 คอลัมน์บนหน้าแรก (สูงสุด 4 การ์ด)</div>
         </div>
         {!form && list.length < 4 && <button onClick={startAdd} className="sfg-btn sfg-btn-primary"><Plus size={15} /> เพิ่มแบนเนอร์</button>}
       </div>
@@ -2192,6 +2224,10 @@ function PromoBannersManager({ banners, onSave }) {
             <div style={{ gridColumn: "1 / -1" }}>
               <label style={{ fontSize: 12, color: "var(--ink-soft)", display: "block", marginBottom: 4 }}>คำอธิบาย</label>
               <textarea className="sfg-input" rows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="รายละเอียดสั้นๆ ที่ต้องการสื่อสาร" />
+            </div>
+            <div>
+              <label style={{ fontSize: 12, color: "var(--ink-soft)", display: "block", marginBottom: 4 }}>วันที่ (ไม่บังคับ)</label>
+              <input className="sfg-input" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} placeholder="เช่น 08/07/2026 หรือ 2026-07-08" />
             </div>
             <div>
               <label style={{ fontSize: 12, color: "var(--ink-soft)", display: "block", marginBottom: 4 }}>ชนิดสื่อ</label>
@@ -2267,6 +2303,7 @@ function PromoBannersManager({ banners, onSave }) {
               <tr style={{ background: "var(--surface-2)", textAlign: "left" }}>
                 <th style={{ padding: "10px 14px" }}>#</th>
                 <th style={{ padding: "10px 14px" }}>หัวข้อ</th>
+                <th style={{ padding: "10px 14px" }}>วันที่</th>
                 <th style={{ padding: "10px 14px" }}>สื่อ</th>
                 <th style={{ padding: "10px 14px" }}>ลิงก์</th>
                 <th style={{ padding: "10px 14px", width: 110 }}>จัดการ</th>
@@ -2277,6 +2314,7 @@ function PromoBannersManager({ banners, onSave }) {
                 <tr key={b.id} style={{ borderTop: "1px solid var(--border)" }}>
                   <td style={{ padding: "10px 14px", fontWeight: 700, color: "var(--ink-soft)" }}>{i + 1}</td>
                   <td style={{ padding: "10px 14px", fontWeight: 600 }}>{b.title || "—"}</td>
+                  <td style={{ padding: "10px 14px", color: "var(--ink-soft)" }}>{formatDate(b.date || b.created_at) || "—"}</td>
                   <td style={{ padding: "10px 14px", color: "var(--ink-soft)" }}>
                     {b.mediaUrl ? (
                       b.mediaType === "video"
