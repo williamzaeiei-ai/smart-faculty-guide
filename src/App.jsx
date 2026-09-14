@@ -38,20 +38,20 @@ const GlobalStyle = () => (
       transition: background 0.25s ease, color 0.25s ease;
     }
     .sfg-app[data-theme="dark"] {
-      --bg: #14151C;
-      --surface: #1C1E28;
-      --surface-2: #23252F;
+      --bg: #0B0F19;
+      --surface: #121722;
+      --surface-2: #1A2130;
       --ink: #EDEAE0;
-      --ink-soft: #A6A091;
+      --ink-soft: #9AA3B5;
       --primary: #9FB4DE;
       --primary-soft: #7791C4;
-      --on-primary: #14151C;
+      --on-primary: #0B0F19;
       --accent: #E6C67E;
       --accent-soft: #B07A1E;
-      --border: #2E313D;
+      --border: #232B3B;
       --success: #6BC28E;
       --danger: #E28A72;
-      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px -12px rgba(0,0,0,0.5);
+      --shadow: 0 1px 2px rgba(0,0,0,0.35), 0 8px 24px -12px rgba(0,0,0,0.55);
     }
     .sfg-app * { box-sizing: border-box; }
     .sfg-app h1, .sfg-app h2, .sfg-app h3, .sfg-app h4 {
@@ -161,6 +161,17 @@ const GlobalStyle = () => (
       background: linear-gradient(135deg, var(--primary-soft), var(--primary));
       color: var(--on-primary);
     }
+
+    /* ===== 4-column card grids (Desktop 4 / Tablet 2 / Mobile 1) ===== */
+    .sfg-card-grid, .sfg-promo-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+    @media (max-width: 900px) { .sfg-card-grid, .sfg-promo-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 567px) { .sfg-card-grid, .sfg-promo-grid { grid-template-columns: 1fr; } }
+
+    /* ===== Promo banners ===== */
+    .sfg-promo-media { position: relative; overflow: hidden; background: linear-gradient(135deg, var(--primary-soft), var(--primary)); }
+    .sfg-promo-media img { transition: transform .45s ease; }
+    .sfg-promo-media:hover img { transform: scale(1.08); }
+    .sfg-promo-card-link { display: block; height: 100%; color: inherit; text-decoration: none; }
   `}</style>
 );
 
@@ -246,6 +257,22 @@ const DEFAULT_FEATURES = [
   { icon: "bot", title: "ถาม AI ได้ทันที", desc: "Faculty AI Assistant ตอบคำถามจากฐานข้อมูลจริงของคณะ ไม่สร้างข้อมูลขึ้นเอง" },
   { icon: "navigation", title: "แผนผังอย่างง่าย", desc: "ดูตำแหน่งอาคารและหาเส้นทางไปยังจุดหมายที่ต้องการได้ทันที" },
   { icon: "dashboard", title: "แก้ไขได้เอง ไม่ต้องเขียนโค้ด", desc: "เจ้าหน้าที่คณะอัปเดตข้อมูล รูปภาพ และวิดีโอผ่านหน้า Admin ได้ทุกเมื่อ" },
+];
+
+/* Default titles for the 4 main home-page categories (fallback when empty) */
+const DEFAULT_SECTION_TITLES = {
+  titlePlaces: "สถานที่ที่ใช้บ่อย",
+  titleTeachers: "อาจารย์แนะนำ",
+  titleDepartments: "สาขาทั้งหมดในคณะ",
+  titleBuildings: "อาคารภายในคณะ",
+};
+
+/* Default promo banners shown on the home page until the admin customizes them */
+const DEFAULT_PROMO_BANNERS = [
+  { id: "pb1", title: "เปิดรับสมัครนักศึกษาใหม่", description: "สมัครเรียนคณะวิศวกรรม รับรอบโควตาและรอบรับตรงตลอดปี", mediaType: "image", mediaUrl: "", linkUrl: "" },
+  { id: "pb2", title: "คลินิกให้คำปรึกษา AI", description: "มาลองใช้ Faculty AI Assistant ถามทุกเรื่องภายในคณะได้ทันที", mediaType: "image", mediaUrl: "", linkUrl: "" },
+  { id: "pb3", title: "อบรมระบบสารสนเทศ", description: "เรียนรู้วิธีอัปเดตข้อมูลผ่านหน้า Admin Dashboard ของคณะ", mediaType: "image", mediaUrl: "", linkUrl: "" },
+  { id: "pb4", title: "กิจกรรมนักศึกษา", description: "ร่วมกิจกรรมพัฒนาทักษะซอฟต์แวร์และนวัตกรรมประจำภาคเรียน", mediaType: "image", mediaUrl: "", linkUrl: "" },
 ];
 
 function isVideoMedia(url) {
@@ -441,6 +468,14 @@ function seedData() {
       contactPhone: "02-000-1000",
       contactAddress: "123 ถนนตัวอย่าง แขวงตัวอย่าง เขตตัวอย่าง กรุงเทพฯ 10000",
       features: DEFAULT_FEATURES,
+      bgImageUrl: "",
+      bgOverlayOpacity: 0.55,
+      enableDarkMode: false,
+      promoBanners: DEFAULT_PROMO_BANNERS,
+      titlePlaces: DEFAULT_SECTION_TITLES.titlePlaces,
+      titleTeachers: DEFAULT_SECTION_TITLES.titleTeachers,
+      titleDepartments: DEFAULT_SECTION_TITLES.titleDepartments,
+      titleBuildings: DEFAULT_SECTION_TITLES.titleBuildings,
     },
   };
 }
@@ -454,6 +489,15 @@ function normalizeSettings(raw) {
     merged.features = DEFAULT_FEATURES;
   }
   merged.heroSlideshowImages = Array.isArray(merged.heroSlideshowImages) ? merged.heroSlideshowImages : [];
+  merged.promoBanners = Array.isArray(merged.promoBanners) ? merged.promoBanners : [];
+  merged.bgImageUrl = merged.bgImageUrl || "";
+  const op = Number(merged.bgOverlayOpacity);
+  merged.bgOverlayOpacity = Number.isFinite(op) ? Math.min(Math.max(op, 0), 1) : 0.55;
+  merged.enableDarkMode = !!merged.enableDarkMode;
+  merged.titlePlaces = merged.titlePlaces || DEFAULT_SECTION_TITLES.titlePlaces;
+  merged.titleTeachers = merged.titleTeachers || DEFAULT_SECTION_TITLES.titleTeachers;
+  merged.titleDepartments = merged.titleDepartments || DEFAULT_SECTION_TITLES.titleDepartments;
+  merged.titleBuildings = merged.titleBuildings || DEFAULT_SECTION_TITLES.titleBuildings;
   return merged;
 }
 
@@ -840,6 +884,51 @@ function Navbar({ page, goto, isAdmin, onLogout, theme, toggleTheme, settings, q
 /* =========================================================================
    HOME PAGE
    ========================================================================= */
+function PromoBannerCard({ banner, index = 0 }) {
+  const title = banner?.title || "";
+  const desc = banner?.description || "";
+  const mediaType = banner?.mediaType === "video" ? "video" : "image";
+  const mediaUrl = banner?.mediaUrl || "";
+  const accent = DEPT_PALETTE[index % DEPT_PALETTE.length];
+
+  let media;
+  if (mediaUrl && mediaType === "video") {
+    media = <video src={mediaUrl} autoPlay loop muted playsInline style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />;
+  } else if (mediaUrl) {
+    media = <img src={mediaUrl} alt={title} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />;
+  } else {
+    media = (
+      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(255,255,255,0.9)" }}>
+        {mediaType === "video" ? <VideoIcon size={26} strokeWidth={1.5} /> : <ImageIcon size={26} strokeWidth={1.5} />}
+      </div>
+    );
+  }
+
+  const card = (
+    <div className="sfg-card sfg-card-hover" style={{ height: "100%", display: "flex", flexDirection: "column", border: "none" }}>
+      <div className="sfg-promo-media" style={{ aspectRatio: "16/9", flexShrink: 0 }}>
+        {media}
+        <span style={{ position: "absolute", top: 10, left: 10, fontSize: 10.5, fontWeight: 700, padding: "3px 9px", borderRadius: 999, background: accent, color: "#fff", display: "flex", alignItems: "center", gap: 4 }}>
+          {mediaType === "video" ? <VideoIcon size={11} /> : <ImageIcon size={11} />} {mediaType === "video" ? "วิดีโอ" : "ภาพ"}
+        </span>
+      </div>
+      <div style={{ padding: 14, flex: 1, display: "flex", flexDirection: "column" }}>
+        <h3 style={{ fontSize: 15, marginBottom: 6 }}>{title}</h3>
+        <p style={{ color: "var(--ink-soft)", fontSize: 12.5, lineHeight: 1.65, margin: 0, flex: 1 }}>{desc}</p>
+        {banner.linkUrl && (
+          <span style={{ marginTop: 10, color: "var(--primary)", fontSize: 13, fontWeight: 700, display: "flex", alignItems: "center", gap: 2 }}>
+            ดูรายละเอียด <ChevronRight size={14} />
+          </span>
+        )}
+      </div>
+    </div>
+  );
+
+  return banner.linkUrl ? (
+    <a href={banner.linkUrl} target="_blank" rel="noopener noreferrer" className="sfg-promo-card-link">{card}</a>
+  ) : card;
+}
+
 function HomePage({ data, goto, query, setQuery, onSearchSubmit, navOverlay }) {
   const s = data?.settings || {};
   const FEATURE_COLORS = ["#B07A1E", "#2E6F6B", "#7D4FA6", "#3D6FB0", "#5C8A3A", "#B0492E"];
@@ -852,6 +941,15 @@ function HomePage({ data, goto, query, setQuery, onSearchSubmit, navOverlay }) {
   }));
 
   const heroHasBg = resolveHeroBgMode(s) !== "gradient";
+  const bgImage = s.bgImageUrl || "";
+  const bgOverlay = Number.isFinite(Number(s.bgOverlayOpacity)) ? Math.min(Math.max(Number(s.bgOverlayOpacity), 0), 1) : 0.55;
+  const banners = Array.isArray(s.promoBanners)
+    ? s.promoBanners.filter((b) => b && (b.title || b.mediaUrl || b.description)).slice(0, 4)
+    : [];
+  const places = data?.places || [];
+  const teachers = data?.teachers || [];
+  const departments = data?.departments || [];
+  const buildings = data?.buildings || [];
 
   return (
     <div>
@@ -897,71 +995,87 @@ function HomePage({ data, goto, query, setQuery, onSearchSubmit, navOverlay }) {
         </div>
       </div>
 
-      <div style={{ maxWidth: 1180, margin: "0 auto", padding: "40px 20px" }}>
-        {/* FEATURES */}
-        <SectionTitle eyebrow="ทำไมต้องใช้ระบบนี้" title="ครบทุกข้อมูลของคณะ ในเว็บเดียว" />
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 16, marginBottom: 52 }}>
-          {features.map((f) => (
-            <div key={f.title} className="sfg-card" style={{ padding: 20 }}>
-              <div className="sfg-feature-icon" style={{ background: f.color + "1A", color: f.color, marginBottom: 14 }}>
-                <f.icon size={22} strokeWidth={1.8} />
+      {/* CONTENT — background image overlay container */}
+      <div style={{ position: "relative", backgroundImage: bgImage ? `url("${bgImage}")` : undefined, backgroundSize: "cover", backgroundPosition: "center", backgroundRepeat: "no-repeat", backgroundAttachment: bgImage ? "fixed" : undefined }}>
+        {bgImage && <div style={{ position: "absolute", inset: 0, background: `rgba(11,15,25,${bgOverlay})`, zIndex: 0 }} />}
+        <div style={{ position: "relative", maxWidth: 1180, margin: "0 auto", padding: "40px 20px", zIndex: 1 }}>
+
+          {/* Promo Banners (if any) — otherwise show legacy Feature Cards */}
+          {banners.length > 0 ? (
+            <>
+              <SectionTitle eyebrow="ประชาสัมพันธ์" title="ข่าวประชาสัมพันธ์และโปรโมชัน" />
+              <div className="sfg-promo-grid" style={{ marginBottom: 52 }}>
+                {banners.map((b, i) => <PromoBannerCard key={b.id || i} banner={b} index={i} />)}
               </div>
-              <h3 style={{ fontSize: 15.5, marginBottom: 6 }}>{f.title}</h3>
-              <p style={{ color: "var(--ink-soft)", fontSize: 13, lineHeight: 1.7, margin: 0 }}>{f.desc}</p>
-            </div>
-          ))}
-        </div>
+            </>
+          ) : (
+            <>
+              <SectionTitle eyebrow="ทำไมต้องใช้ระบบนี้" title="ครบทุกข้อมูลของคณะ ในเว็บเดียว" />
+              <div className="sfg-card-grid" style={{ marginBottom: 52 }}>
+                {features.map((f) => (
+                  <div key={f.title} className="sfg-card" style={{ padding: 20 }}>
+                    <div className="sfg-feature-icon" style={{ background: f.color + "1A", color: f.color, marginBottom: 14 }}>
+                      <f.icon size={22} strokeWidth={1.8} />
+                    </div>
+                    <h3 style={{ fontSize: 15.5, marginBottom: 6 }}>{f.title}</h3>
+                    <p style={{ color: "var(--ink-soft)", fontSize: 13, lineHeight: 1.7, margin: 0 }}>{f.desc}</p>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
 
-        <SectionTitle eyebrow="แนะนำ" title="สถานที่ที่ใช้บ่อย" action={<button onClick={() => goto("places")} className="sfg-btn sfg-btn-ghost">ดูทั้งหมด <ChevronRight size={15} /></button>} />
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(230px,1fr))", gap: 16, marginBottom: 52 }}>
-          {data.places.slice(0, 3).map((p) => (
-            <PlaceCard key={p.id} place={p} data={data} onClick={() => goto("place-detail", p.id)} />
-          ))}
-        </div>
+          <SectionTitle eyebrow="แนะนำ" title={s.titlePlaces || DEFAULT_SECTION_TITLES.titlePlaces} action={<button onClick={() => goto("places")} className="sfg-btn sfg-btn-ghost">ดูทั้งหมด <ChevronRight size={15} /></button>} />
+          <div className="sfg-card-grid" style={{ marginBottom: 52 }}>
+            {places.slice(0, 4).map((p) => (
+              <PlaceCard key={p.id} place={p} data={data} onClick={() => goto("place-detail", p.id)} />
+            ))}
+          </div>
 
-        <SectionTitle eyebrow="บุคลากร" title="อาจารย์แนะนำ" action={<button onClick={() => goto("teachers")} className="sfg-btn sfg-btn-ghost">ดูอาจารย์ทั้งหมด <ChevronRight size={15} /></button>} />
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(230px,1fr))", gap: 16, marginBottom: 52 }}>
-          {data.teachers.slice(0, 3).map((t) => (
-            <TeacherCard key={t.id} teacher={t} data={data} onClick={() => goto("teacher-profile", t.id)} />
-          ))}
-        </div>
+          <SectionTitle eyebrow="บุคลากร" title={s.titleTeachers || DEFAULT_SECTION_TITLES.titleTeachers} action={<button onClick={() => goto("teachers")} className="sfg-btn sfg-btn-ghost">ดูอาจารย์ทั้งหมด <ChevronRight size={15} /></button>} />
+          <div className="sfg-card-grid" style={{ marginBottom: 52 }}>
+            {teachers.slice(0, 4).map((t) => (
+              <TeacherCard key={t.id} teacher={t} data={data} onClick={() => goto("teacher-profile", t.id)} />
+            ))}
+          </div>
 
-        <SectionTitle eyebrow="สาขาวิชา" title="สาขาทั้งหมดในคณะ" action={<button onClick={() => goto("departments")} className="sfg-btn sfg-btn-ghost">ดูทั้งหมด <ChevronRight size={15} /></button>} />
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(230px,1fr))", gap: 16, marginBottom: 52 }}>
-          {data.departments.slice(0, 3).map((d) => (
-            <DepartmentCard key={d.id} dept={d} data={data} onClick={() => goto("department-detail", d.id)} />
-          ))}
-        </div>
+          <SectionTitle eyebrow="สาขาวิชา" title={s.titleDepartments || DEFAULT_SECTION_TITLES.titleDepartments} action={<button onClick={() => goto("departments")} className="sfg-btn sfg-btn-ghost">ดูทั้งหมด <ChevronRight size={15} /></button>} />
+          <div className="sfg-card-grid" style={{ marginBottom: 52 }}>
+            {departments.slice(0, 4).map((d) => (
+              <DepartmentCard key={d.id} dept={d} data={data} onClick={() => goto("department-detail", d.id)} />
+            ))}
+          </div>
 
-        <SectionTitle eyebrow="อาคาร" title="อาคารภายในคณะ" action={<button onClick={() => goto("buildings")} className="sfg-btn sfg-btn-ghost">ดูทั้งหมด <ChevronRight size={15} /></button>} />
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(230px,1fr))", gap: 16, marginBottom: 52 }}>
-          {data.buildings.slice(0, 4).map((b) => (
-            <BuildingCard key={b.id} b={b} data={data} onClick={() => goto("building-detail", b.id)} />
-          ))}
-        </div>
+          <SectionTitle eyebrow="อาคาร" title={s.titleBuildings || DEFAULT_SECTION_TITLES.titleBuildings} action={<button onClick={() => goto("buildings")} className="sfg-btn sfg-btn-ghost">ดูทั้งหมด <ChevronRight size={15} /></button>} />
+          <div className="sfg-card-grid" style={{ marginBottom: 52 }}>
+            {buildings.slice(0, 4).map((b) => (
+              <BuildingCard key={b.id} b={b} data={data} onClick={() => goto("building-detail", b.id)} />
+            ))}
+          </div>
 
-        {data.gallery && data.gallery.length > 0 && (
-          <>
-            <SectionTitle eyebrow="แกลเลอรี" title="ภาพแนะนำ" />
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))", gridAutoRows: 130, gap: 14, gridAutoFlow: "dense" }}>
-              {data.gallery.map((g, i) => (
-                <div
-                  key={g.id}
-                  className="sfg-card sfg-card-hover sfg-gallery-tile"
-                  style={{
-                    border: "none", padding: 0, cursor: "default",
-                    gridColumn: i === 0 ? "span 2" : "span 1",
-                    gridRow: i === 0 ? "span 2" : "span 1",
-                  }}
-                  title={g.caption}
-                >
-                  <Thumb icon={ImageIcon} src={g.image} accent={DEPT_PALETTE[i % DEPT_PALETTE.length]} aspect="auto" size={i === 0 ? 34 : 22} className="sfg-gallery-media" />
-                  {g.caption && <div className="sfg-gallery-caption" style={{ fontSize: i === 0 ? 15 : 11 }}>{g.caption}</div>}
-                </div>
-              ))}
-            </div>
-          </>
-        )}
+          {Array.isArray(data?.gallery) && data.gallery.length > 0 && (
+            <>
+              <SectionTitle eyebrow="แกลเลอรี" title="ภาพแนะนำ" />
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))", gridAutoRows: 130, gap: 14, gridAutoFlow: "dense" }}>
+                {data.gallery.map((g, i) => (
+                  <div
+                    key={g.id}
+                    className="sfg-card sfg-card-hover sfg-gallery-tile"
+                    style={{
+                      border: "none", padding: 0, cursor: "default",
+                      gridColumn: i === 0 ? "span 2" : "span 1",
+                      gridRow: i === 0 ? "span 2" : "span 1",
+                    }}
+                    title={g.caption}
+                  >
+                    <Thumb icon={ImageIcon} src={g.image} accent={DEPT_PALETTE[i % DEPT_PALETTE.length]} aspect="auto" size={i === 0 ? 34 : 22} className="sfg-gallery-media" />
+                    {g.caption && <div className="sfg-gallery-caption" style={{ fontSize: i === 0 ? 15 : 11 }}>{g.caption}</div>}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -2031,6 +2145,164 @@ function GenericAdminTable({ title, items, fields, onAdd, onUpdate, onDelete, re
 /* =========================================================================
    ADMIN — DASHBOARD
    ========================================================================= */
+function PromoBannersManager({ banners, onSave }) {
+  const [list, setList] = useState(banners || []);
+  const [form, setForm] = useState(null);
+  const [mediaError, setMediaError] = useState("");
+
+  useEffect(() => { setList(banners || []); }, [banners]);
+
+  const persistList = (next) => { setList(next); onSave(next.slice(0, 4)); };
+  const startAdd = () => setForm({ id: null, title: "", description: "", mediaType: "image", mediaUrl: "", linkUrl: "" });
+  const startEdit = (item) => setForm({ ...item });
+  const cancelEdit = () => { setForm(null); setMediaError(""); };
+
+  const submit = (e) => {
+    e.preventDefault();
+    const f = { ...form, title: (form.title || "").trim(), description: (form.description || "").trim(), linkUrl: (form.linkUrl || "").trim(), mediaUrl: (form.mediaUrl || "").trim(), mediaType: form.mediaType || "image" };
+    if (!f.title && !f.mediaUrl) { setMediaError("กรุณาใส่หัวข้อ หรืออัปโหลดไฟล์สื่ออย่างน้อย 1 อย่าง"); return; }
+    setMediaError("");
+    const next = f.id ? list.map((b) => (b.id === f.id ? f : b)) : [...list, { ...f, id: f.id || uid("pb") }];
+    persistList(next);
+    cancelEdit();
+  };
+
+  const remove = (id) => {
+    if (!confirm("ลบแบนเนอร์นี้ใช่หรือไม่?")) return;
+    persistList(list.filter((b) => b.id !== id));
+  };
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <div>
+          <h3 style={{ fontSize: 18 }}>Promo Banners <span style={{ color: "var(--ink-soft)", fontSize: 13, fontWeight: 400 }}>({list.length}/4)</span></h3>
+          <div style={{ fontSize: 12.5, color: "var(--ink-soft)" }}>แสดงผลสูงสุด 4 การ์ดต่อแถว บนหน้าแรก</div>
+        </div>
+        {!form && list.length < 4 && <button onClick={startAdd} className="sfg-btn sfg-btn-primary"><Plus size={15} /> เพิ่มแบนเนอร์</button>}
+      </div>
+
+      {form && (
+        <form onSubmit={submit} className="sfg-card" style={{ padding: 18, marginBottom: 20 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 12, marginBottom: 14 }}>
+            <div style={{ gridColumn: "1 / -1" }}>
+              <label style={{ fontSize: 12, color: "var(--ink-soft)", display: "block", marginBottom: 4 }}>หัวข้อ</label>
+              <input className="sfg-input" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="เช่น เปิดรับสมัครนักศึกษาใหม่" />
+            </div>
+            <div style={{ gridColumn: "1 / -1" }}>
+              <label style={{ fontSize: 12, color: "var(--ink-soft)", display: "block", marginBottom: 4 }}>คำอธิบาย</label>
+              <textarea className="sfg-input" rows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="รายละเอียดสั้นๆ ที่ต้องการสื่อสาร" />
+            </div>
+            <div>
+              <label style={{ fontSize: 12, color: "var(--ink-soft)", display: "block", marginBottom: 4 }}>ชนิดสื่อ</label>
+              <div style={{ display: "flex", gap: 8, marginTop: 2 }}>
+                {[["image", "ภาพ"], ["video", "วิดีโอ"]].map(([v, l]) => (
+                  <button key={v} type="button" onClick={() => setForm({ ...form, mediaType: v })} className="sfg-btn" style={{ fontSize: 12.5, border: "1px solid " + (form.mediaType === v ? "var(--primary)" : "var(--border)"), background: form.mediaType === v ? "var(--primary)" : "var(--surface)", color: form.mediaType === v ? "var(--on-primary)" : "var(--ink)" }}>
+                    {v === "video" ? <VideoIcon size={13} /> : <ImageIcon size={13} />} {l}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label style={{ fontSize: 12, color: "var(--ink-soft)", display: "block", marginBottom: 4 }}>ลิงก์ไปยังหน้า (ไม่บังคับ)</label>
+              <input className="sfg-input" value={form.linkUrl} onChange={(e) => setForm({ ...form, linkUrl: e.target.value })} placeholder="https://..." />
+            </div>
+          </div>
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ fontSize: 12, color: "var(--ink-soft)", display: "block", marginBottom: 4 }}>
+              ไฟล์สื่อ ({form.mediaType === "video" ? "MP4 / WebM — ขนาดไม่เกิน 10 MB" : "ภาพ JPG/PNG/WebP/GIF — ขนาดไม่เกิน 2 MB"})
+            </label>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+              {form.mediaUrl ? (
+                form.mediaType === "video" ? (
+                  <video src={form.mediaUrl} muted style={{ width: 80, height: 45, objectFit: "cover", borderRadius: 6, border: "1px solid var(--border)" }} />
+                ) : (
+                  <img src={form.mediaUrl} alt="" style={{ width: 80, height: 45, objectFit: "cover", borderRadius: 6, border: "1px solid var(--border)" }} />
+                )
+              ) : (
+                <div style={{ width: 80, height: 45, borderRadius: 6, border: "1px dashed var(--border)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--ink-soft)" }}>
+                  {form.mediaType === "video" ? <VideoIcon size={18} /> : <ImageIcon size={18} />}
+                </div>
+              )}
+              <input
+                type="file"
+                accept={form.mediaType === "video" ? "video/mp4,video/webm" : "image/*"}
+                className="sfg-input"
+                style={{ padding: 6, fontSize: 12 }}
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const maxMB = form.mediaType === "video" ? MAX_VIDEO_MB : MAX_IMAGE_MB;
+                  const msg = validateMediaFile(file, maxMB);
+                  if (msg) { setMediaError(msg); e.target.value = ""; return; }
+                  setMediaError("");
+                  try {
+                    const url = await uploadMedia(file, { maxBytes: form.mediaType === "video" ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES });
+                    setForm((prev) => ({ ...prev, mediaUrl: url }));
+                  } catch (err) { setMediaError(err.message || "อัปโหลดไฟล์ไม่สำเร็จ"); }
+                }}
+              />
+            </div>
+            <input
+              className="sfg-input"
+              placeholder="หรือวางลิงก์ไฟล์สื่อโดยตรง (URL)"
+              value={form.mediaUrl && form.mediaUrl.startsWith("data:") ? "" : (form.mediaUrl || "")}
+              onChange={(e) => setForm({ ...form, mediaUrl: e.target.value })}
+            />
+            {mediaError && <div style={{ fontSize: 12, color: "var(--danger)", marginTop: 4 }}>{mediaError}</div>}
+          </div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <button type="submit" className="sfg-btn sfg-btn-primary"><Check size={15} /> {form.id ? "บันทึกการแก้ไข" : "เพิ่มแบนเนอร์"}</button>
+            <button type="button" onClick={cancelEdit} className="sfg-btn sfg-btn-ghost">ยกเลิก</button>
+          </div>
+        </form>
+      )}
+
+      <div className="sfg-card" style={{ overflowX: "auto" }}>
+        {list.length === 0 ? (
+          <div style={{ padding: 24 }}><EmptyState text="ยังไม่มี Promo Banner — กดปุ่มเพิ่มด้านบนเพื่อเริ่ม" /></div>
+        ) : (
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <thead>
+              <tr style={{ background: "var(--surface-2)", textAlign: "left" }}>
+                <th style={{ padding: "10px 14px" }}>#</th>
+                <th style={{ padding: "10px 14px" }}>หัวข้อ</th>
+                <th style={{ padding: "10px 14px" }}>สื่อ</th>
+                <th style={{ padding: "10px 14px" }}>ลิงก์</th>
+                <th style={{ padding: "10px 14px", width: 110 }}>จัดการ</th>
+              </tr>
+            </thead>
+            <tbody>
+              {list.map((b, i) => (
+                <tr key={b.id} style={{ borderTop: "1px solid var(--border)" }}>
+                  <td style={{ padding: "10px 14px", fontWeight: 700, color: "var(--ink-soft)" }}>{i + 1}</td>
+                  <td style={{ padding: "10px 14px", fontWeight: 600 }}>{b.title || "—"}</td>
+                  <td style={{ padding: "10px 14px", color: "var(--ink-soft)" }}>
+                    {b.mediaUrl ? (
+                      b.mediaType === "video"
+                        ? <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><VideoIcon size={14} /> วิดีโอ</span>
+                        : <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><ImageIcon size={14} /> ภาพ</span>
+                    ) : (
+                      <span style={{ fontStyle: "italic" }}>ไม่มีสื่อ</span>
+                    )}
+                  </td>
+                  <td style={{ padding: "10px 14px", color: "var(--ink-soft)", maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{b.linkUrl || "—"}</td>
+                  <td style={{ padding: "10px 14px" }}>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button onClick={() => startEdit(b)} className="sfg-btn sfg-btn-ghost" style={{ padding: 7 }}><Pencil size={14} /></button>
+                      <button onClick={() => remove(b.id)} className="sfg-btn sfg-btn-danger" style={{ padding: 7 }}><Trash2 size={14} /></button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function AdminDashboard({ data, persist, saveError, onLogout, goto }) {
   const [tab, setTab] = useState("overview");
 
@@ -2064,6 +2336,7 @@ function AdminDashboard({ data, persist, saveError, onLogout, goto }) {
     { key: "places", label: "Places", icon: MapPin },
     { key: "gallery", label: "Gallery", icon: ImageIcon },
     { key: "schedules", label: "Schedules", icon: Calendar },
+    { key: "banners", label: "Promo Banners", icon: ImageIcon },
     { key: "settings", label: "Website Settings", icon: Pencil },
   ];
 
@@ -2266,6 +2539,13 @@ function AdminDashboard({ data, persist, saveError, onLogout, goto }) {
           />
         )}
 
+        {tab === "banners" && (
+          <PromoBannersManager
+            banners={Array.isArray(data.settings.promoBanners) ? data.settings.promoBanners : []}
+            onSave={(banners) => persist({ ...data, settings: { ...(data.settings || {}), promoBanners: banners } })}
+          />
+        )}
+
         {tab === "settings" && (
           <SettingsForm settings={data?.settings || {}} onSave={(s) => persist({ ...data, settings: s })} />
         )}
@@ -2280,6 +2560,7 @@ function SettingsForm({ settings, onSave }) {
   const [logoError, setLogoError] = useState("");
   const [heroError, setHeroError] = useState("");
   const [slideErrors, setSlideErrors] = useState([]);
+  const [bgError, setBgError] = useState("");
   useEffect(() => setForm(settings || {}), [settings]);
   const save = (e) => { e.preventDefault(); onSave(form); };
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
@@ -2545,6 +2826,94 @@ function SettingsForm({ settings, onSave }) {
       ))}
 
       <div style={{ borderTop: "1px solid var(--border)", marginTop: 8, paddingTop: 16 }}>
+        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 2 }}>ธีมและพื้นหลังหน้าแรก (Background & Dark Mode)</div>
+        <div style={{ fontSize: 12, color: "var(--ink-soft)", marginBottom: 12 }}>กำหนดภาพพื้นหลัง ความทึบของเลเยอร์มืด และโหมดกลางคืนสำหรับทั้งเว็บ</div>
+
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 14 }}>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 13.5 }}>โหมดกลางคืน (Dark Mode)</div>
+            <div style={{ fontSize: 12, color: "var(--ink-soft)" }}>เปิดใช้งาน = หน้าเว็บแสดงโทน Engineering Dark (#0B0F19) โดยอัตโนมัติ</div>
+          </div>
+          <button type="button" onClick={() => setForm({ ...form, enableDarkMode: !form.enableDarkMode })} title={form.enableDarkMode ? "ปิด Dark Mode" : "เปิด Dark Mode"} style={{ width: 54, height: 28, borderRadius: 999, padding: "3px 5px", display: "flex", alignItems: "center", justifyContent: form.enableDarkMode ? "flex-end" : "flex-start", background: form.enableDarkMode ? "var(--success)" : "var(--surface-2)", border: "1px solid var(--border)", cursor: "pointer", transition: "background .2s ease" }}>
+            <span style={{ width: 22, height: 22, borderRadius: "50%", background: "#fff", display: "block", boxShadow: "0 1px 2px rgba(0,0,0,0.3)" }} />
+          </button>
+        </div>
+
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ fontSize: 12, color: "var(--ink-soft)", display: "block", marginBottom: 4 }}>ภาพพื้นหลังหน้าแรก (bgImageUrl)</label>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+            {form.bgImageUrl ? (
+              <img src={form.bgImageUrl} alt="" style={{ width: 80, height: 45, objectFit: "cover", borderRadius: 6, border: "1px solid var(--border)" }} />
+            ) : (
+              <div style={{ width: 80, height: 45, borderRadius: 6, border: "1px dashed var(--border)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--ink-soft)" }}>
+                <ImageIcon size={18} />
+              </div>
+            )}
+            <input
+              type="file"
+              accept="image/*"
+              className="sfg-input"
+              style={{ padding: 6, fontSize: 12 }}
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const msg = validateMediaFile(file, MAX_IMAGE_MB);
+                if (msg) { setBgError(msg); e.target.value = ""; return; }
+                setBgError("");
+                try {
+                  const url = await uploadMedia(file, { maxBytes: MAX_IMAGE_BYTES });
+                  const next = { ...form, bgImageUrl: url };
+                  setForm(next);
+                  onSave(next);
+                } catch (err) { setBgError(err.message || "อัปโหลดไฟล์ไม่สำเร็จ"); }
+              }}
+            />
+            {form.bgImageUrl && (
+              <button type="button" onClick={() => setForm({ ...form, bgImageUrl: "" })} className="sfg-btn sfg-btn-ghost" style={{ padding: "6px 10px", fontSize: 12 }}>
+                <X size={13} /> ลบ
+              </button>
+            )}
+          </div>
+          <input
+            className="sfg-input"
+            placeholder="หรือวางลิงก์ภาพพื้นหลังโดยตรง (https://...)"
+            value={form.bgImageUrl && form.bgImageUrl.startsWith("data:") ? "" : (form.bgImageUrl || "")}
+            onChange={(e) => setForm({ ...form, bgImageUrl: e.target.value })}
+          />
+          {bgError && <div style={{ fontSize: 12, color: "var(--danger)", marginTop: 4 }}>{bgError}</div>}
+          <div style={{ fontSize: 11, color: "var(--ink-soft)", marginTop: 4 }}>รองรับไฟล์ภาพขนาดไม่เกิน {MAX_IMAGE_MB} MB — ถ้าไม่ตั้งค่า จะใช้สีพื้นหลังตามธีม (Light/Dark) อัตโนมัติ</div>
+        </div>
+
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ fontSize: 12, color: "var(--ink-soft)", display: "block", marginBottom: 4 }}>
+            ความทึบของเลเยอร์มืด: {Math.round((form.bgOverlayOpacity ?? 0.55) * 100)}%
+          </label>
+          <input
+            type="range" min="0" max="100"
+            value={Math.round((form.bgOverlayOpacity ?? 0.55) * 100)}
+            onChange={(e) => setForm({ ...form, bgOverlayOpacity: Number(e.target.value) / 100 })}
+            style={{ width: "100%" }}
+          />
+        </div>
+      </div>
+
+      <div style={{ borderTop: "1px solid var(--border)", marginTop: 8, paddingTop: 16 }}>
+        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 2 }}>หัวข้อหมวดหลัก (หน้าแรก)</div>
+        <div style={{ fontSize: 12, color: "var(--ink-soft)", marginBottom: 12 }}>กำหนดชื่อของ 4 หมวดบนหน้าแรก — ถ้าปล่อยว่างจะใช้ค่าเริ่มต้นอัตโนมัติ</div>
+        {[
+          ["titlePlaces", "สถานที่ที่ใช้บ่อย"],
+          ["titleTeachers", "อาจารย์แนะนำ"],
+          ["titleDepartments", "สาขาทั้งหมดในคณะ"],
+          ["titleBuildings", "อาคารภายในคณะ"],
+        ].map(([key, label]) => (
+          <div key={key} style={{ marginBottom: 10 }}>
+            <label style={{ fontSize: 12, color: "var(--ink-soft)", display: "block", marginBottom: 4 }}>{label}</label>
+            <input className="sfg-input" value={form[key] || ""} onChange={set(key)} placeholder={label} />
+          </div>
+        ))}
+      </div>
+
+      <div style={{ borderTop: "1px solid var(--border)", marginTop: 8, paddingTop: 16 }}>
         <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 2 }}>การ์ด "ทำไมต้องใช้ระบบนี้" (หน้าแรก)</div>
         <div style={{ fontSize: 12, color: "var(--ink-soft)", marginBottom: 12 }}>แก้ไอคอน หัวข้อ และคำอธิบายของการ์ดทั้ง 4 ใบได้ที่นี่</div>
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -2622,6 +2991,11 @@ export default function App() {
   }, [page.name]);
 
   const navOverlay = page.name === "home" && !scrolled;
+
+  useEffect(() => {
+    if (data?.settings?.enableDarkMode == null) return;
+    setTheme(data.settings.enableDarkMode ? "dark" : "light");
+  }, [data?.settings?.enableDarkMode]);
 
   useEffect(() => {
     // Establish the very first history entry so the browser Back button has something to land on.
